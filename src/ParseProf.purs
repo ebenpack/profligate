@@ -7,15 +7,14 @@ import Data.Date.Component (Day, Month(..), Year)
 import Data.DateTime (DateTime(..), Time(..), Weekday(..), canonicalDate)
 import Data.Enum (toEnum)
 import Data.Int (fromString, pow, toNumber)
-import Math
-import Data.List (List(..), (:), length)
+import Data.List (List(..), (:), length, concat)
 import Data.Array (fromFoldable)
 import Data.List.NonEmpty (toList)
 import Data.Maybe (Maybe(..))
 import Data.String.CodeUnits (fromCharArray, singleton)
-import Text.Parsing.StringParser (Parser, fail)
+import Text.Parsing.StringParser (Parser, fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces)
-import Text.Parsing.StringParser.Combinators (option, sepBy1, many1, manyTill, many)
+import Text.Parsing.StringParser.Combinators (option, sepBy1  , many1, manyTill, many)
 
 type TotalTime =
     { time :: Number
@@ -45,14 +44,14 @@ parseProfFile = do
          , totalAlloc: totalAlloc
          }
 
+-- 	total alloc =     164,784 bytes  (excludes profiling overheads)
 parseTotalAlloc :: Parser Int
-parseTotalAlloc = do
-    alloc <- skipSpaces *> string "total alloc" *> 
-             skipSpaces *> string "=" *> 
-             skipSpaces *> parseIntegerWithCommas <* 
-             skipSpaces <* string "bytes" <* 
-             skipSpaces <* string "(excludes profiling overheads)" <* skipSpaces
-    pure alloc
+parseTotalAlloc = 
+    skipSpaces *> string "total alloc" *> 
+    skipSpaces *> string "=" *> 
+    skipSpaces *> parseIntegerWithCommas <* 
+    skipSpaces <* string "bytes" <* 
+    skipSpaces <* string "(excludes profiling overheads)" <* skipSpaces
 
 
 parseTotalTime :: Parser TotalTime
@@ -62,8 +61,8 @@ parseTotalTime = do
             skipSpaces *> parseFloat <*
             skipSpaces <* string "secs"
     { ticks: ticks, interval: interval, processors: processors } <- do
-        ticks <- string "(" *> parseInteger <* skipSpaces <* string "ticks @" <* skipSpaces
-        interval <- parseInteger <* string "us," <* skipSpaces
+        ticks <- skipSpaces *> string "(" *> parseInteger <* skipSpaces <* string "ticks @" <* skipSpaces
+        interval <- parseInteger <* skipSpaces <* string "us," <* skipSpaces
         processors <- parseInteger <* skipSpaces <* string "processors)" <* skipSpaces
         pure { ticks: ticks, interval: interval, processors: processors }
     pure { time: time, ticks: ticks, interval: interval, processors: processors }
@@ -136,18 +135,28 @@ parseFloat = do
 
 parseIntegerWithCommas :: Parser Int
 parseIntegerWithCommas = do
-    ints <- sepBy1 (char ',') anyDigit -- TODO: This is not very well-formed
-    convertDigits (toList ints) 0 (length $ toList ints)
+    ints <- getDigits'
+    convertDigits ints 0 (length ints)
+    where
+    nDigs 0 = pure Nil
+    nDigs n = do
+        d <- anyDigit
+        ds <- nDigs (n - 1)
+        pure (d:ds)
+    getDigits' = do
+        first <- (try (nDigs 3) <|> try (nDigs 2) <|> try (nDigs 1)) -- Not sure if/why these trys are necessary
+        rest <- many (char ',' *> nDigs 3)
+        pure $ first <> (concat rest)
 
 parseInteger :: Parser Int
 parseInteger = do
     ds <- getDigits
     convertDigits ds 0 (length ds)
-    where
-    getDigits :: Parser (List Char)
-    getDigits = do
-        ds <- many1 anyDigit
-        pure (toList ds)
+
+getDigits :: Parser (List Char)
+getDigits = do
+    ds <- many1 anyDigit
+    pure (toList ds)
 
 convertDigits :: List Char -> Int -> Int -> Parser Int
 convertDigits _ acc 0 = pure acc
