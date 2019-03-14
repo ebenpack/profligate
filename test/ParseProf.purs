@@ -6,6 +6,7 @@ import Data.Date as Date
 import Data.DateTime as DateTime
 import Data.Either (Either(..), isRight)
 import Data.Enum (toEnum)
+import Data.List (fromFoldable)
 import Data.Maybe (Maybe(..), fromJust)
 import Data.Time as Time
 import Effect (Effect)
@@ -14,6 +15,7 @@ import Effect.Console (log)
 import Node.Encoding (Encoding(..))
 import Node.FS ()
 import Node.FS.Sync (readTextFile)
+import ParseProf (parsePerCostCenterCosts)
 import ParseProf as P
 import Partial.Unsafe (unsafePartial)
 import Test.Spec (pending, describe, it)
@@ -48,6 +50,28 @@ test_parseIntegerWithCommas = describe "commas" $ do
 test_parseProfFile f = describe "parseDateTime" $ do
     it "does thing" $ do
         let actual = runParser P.parseProfFile f
+        let perCostCenterCosts = fromFoldable [
+                        { name: "MAIN"
+                        , mod: "MAIN"
+                        , src: "<built-in>"
+                        , time: 0.0
+                        , alloc: 68.8
+                        },
+                        { name: "CAF"
+                        , mod: "GHC.IO.Handle.FD"
+                        , src: "<entire-module>"
+                        , time: 0.0
+                        , alloc: 21.1},
+                        { name: "CAF"
+                        , mod: "GHC.IO.Encoding"
+                        , src: "<entire-module>"
+                        , time: 0.0
+                        , alloc: 1.7},
+                        { name: "main"
+                        , mod: "Main"
+                        , src: "app/Main.hs:(77,1)-(80,27)"
+                        , time: 0.0
+                        , alloc: 6.2}]
         actual `shouldEqual` 
             (Right { timestamp : dateTime
                     , title : "hasktest exe +RTS -N -p -RTS"
@@ -57,6 +81,7 @@ test_parseProfFile f = describe "parseDateTime" $ do
                                   , processors : 6
                                   }
                     , totalAlloc : 164784
+                    , perCostCenterCosts: perCostCenterCosts
                     })
 
 -- test_parseDateTime = 
