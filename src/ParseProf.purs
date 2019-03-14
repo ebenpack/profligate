@@ -3,18 +3,24 @@ module ParseProf where
 import Prelude
 
 import Control.Alternative ((<|>))
+import Data.Array as Array
 import Data.Date.Component (Day, Month(..), Year)
 import Data.DateTime (DateTime(..), Time(..), Weekday(..), canonicalDate)
 import Data.Enum (toEnum)
+import Data.Number as Num
 import Data.Int (fromString, pow, toNumber)
 import Data.List (List(..), (:), length, concat)
-import Data.Array (fromFoldable)
 import Data.List.NonEmpty (toList)
+import Data.Tuple.Nested (Tuple5(..), T5, tuple5)
+import Data.Map (Map(..), empty, lookup, insert, fromFoldable)
 import Data.Maybe (Maybe(..))
+import Data.Foldable (foldr)
+import Data.String as S
 import Data.String.CodeUnits (fromCharArray, singleton)
+import Data.Tuple (Tuple(..))
 import Text.Parsing.StringParser (Parser, fail, try)
-import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces)
-import Text.Parsing.StringParser.Combinators (option, sepBy1  , many1, manyTill, many)
+import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
+import Text.Parsing.StringParser.Combinators (option, sepBy1, many1, manyTill, many)
 
 type TotalTime =
     { time :: Number
@@ -23,12 +29,31 @@ type TotalTime =
     , processors :: Int
     }
 
+type PerCostCenterCosts =
+    { name :: String
+    , mod :: String
+    , src :: String
+    , time :: Number
+    , alloc :: Number
+    }
+
+type PerCostCenterCostsColumnWidths =
+    { costCenter :: Int
+    , mod :: Int
+    , src :: Int
+    , time :: Int
+    , alloc :: Int
+    }
+
 type Profile =
     { timestamp :: DateTime
     , title     :: String
     , totalTime :: TotalTime
     , totalAlloc :: Int
+    , perCostCenterCosts :: List PerCostCenterCosts
     }
+
+-- https://github.com/ghc/ghc/blob/6aaa0655a721605740f23e49c5b4bf6165bfe865/docs/users_guide/profiling.rst#id13
 
 -- https://github.com/ghc/ghc/blob/1c2c2d3dfd4c36884b22163872feb87122b4528d/rts/ProfilerReport.c#L284
 
@@ -38,11 +63,58 @@ parseProfFile = do
     title <- parseHeader *> skipSpaces *> parseTitle <* skipSpaces
     totalTime <- parseTotalTime <* skipSpaces
     totalAlloc <- parseTotalAlloc <* skipSpaces
-    pure { timestamp: timestamp
-         , title: title
-         , totalTime: totalTime
-         , totalAlloc: totalAlloc
-         }
+    perCostCenterCosts <- parsePerCostCenterCosts
+    pure $ 
+        { timestamp: timestamp
+        , title: title
+        , totalTime: totalTime
+        , totalAlloc: totalAlloc
+        , perCostCenterCosts: perCostCenterCosts
+        }
+
+parsePerCostCenterCosts :: Parser (List PerCostCenterCosts)
+parsePerCostCenterCosts = do
+    widths <- skipSpaces *> parseCostCenterCostHeader
+    _ <- skipSpaces
+    ls <- many (parsePerCostCenterCostsLine widths <* eol)
+    pure ls
+
+
+parseCostCenterCostHeader :: Parser PerCostCenterCostsColumnWidths
+parseCostCenterCostHeader = do
+    cs <- spaceAndThing $ string "COST CENTRE" 
+    m <- spaceAndThing $ string "MODULE"
+    src <- spaceAndThing $ string "SRC"
+    time <- spaceAndThing $ string "%time"
+    alloc <- spaceAndThing $ string "%alloc"
+    pure $ 
+        { costCenter: (S.length cs)
+        , mod: (S.length m)
+        , src: (S.length src) 
+        , time: (S.length time)
+        , alloc: (S.length alloc)
+        }
+    where
+    spaceAndThing p = do
+        s <- blankSpace
+        t <- p
+        e <- blankSpace
+        pure $ s <> t <> e
+
+parsePerCostCenterCostsLine :: PerCostCenterCostsColumnWidths -> Parser PerCostCenterCosts
+parsePerCostCenterCostsLine { costCenter: cs, mod: m, src: src, time: time, alloc: alloc } = do
+    name <- takeN cs Just
+    mod <- takeN m Just
+    s <- takeN src Just
+    t <- takeN time Num.fromString
+    a <- takeN alloc Num.fromString
+    pure $
+        { name: name
+        , mod: mod
+        , src: s
+        , time: t
+        , alloc: a
+        }
 
 -- 	total alloc =     164,784 bytes  (excludes profiling overheads)
 parseTotalAlloc :: Parser Int
@@ -52,7 +124,11 @@ parseTotalAlloc =
     skipSpaces *> parseIntegerWithCommas <* 
     skipSpaces <* string "bytes" <* 
     skipSpaces <* string "(excludes profiling overheads)" <* skipSpaces
+    
 
+-- COST CENTRE MODULE           SRC                         %time %alloc
+
+-- MAIN        MAIN             <built-in>                    0.0   68.8
 
 parseTotalTime :: Parser TotalTime
 parseTotalTime = do
@@ -69,8 +145,8 @@ parseTotalTime = do
 
 parseTitle :: Parser String
 parseTitle = do
-    title <- skipSpaces *> manyTill anyChar (string "\n" <|> string "\r\n")
-    pure $ fromCharArray $ fromFoldable title
+    title <- skipSpaces *> manyTill anyChar eol
+    pure $ fromCharArray $ Array.fromFoldable title
 
 parseHeader :: Parser Unit
 parseHeader = do
@@ -192,3 +268,36 @@ parseMonth =
     (string "Oct" *> pure October) <|>
     (string "Nov" *> pure November) <|>
     (string "Dec" *> pure December)
+
+blankLine :: Parser Unit
+blankLine = many separator *> eol *> pure unit
+
+eol :: Parser String
+eol = (string "\n" <|> string "\r\n")
+
+separator :: Parser String
+separator = (string " " <|> string "\t")
+
+blankSpace :: Parser String
+blankSpace = do
+    s <- many separator
+    pure (foldr (<>) "" s)
+
+nonSpace :: Parser String
+nonSpace = do
+    c <- (satisfy \ c -> c /= '\n' && c /= '\r' && c /= ' ' && c /= '\t')
+    pure $ singleton c
+
+-- TODO: Better name? make less specialized?
+takeN :: forall a. Int -> (String -> Maybe a) -> Parser a
+takeN n p = go n ""
+    where
+    go 0 acc = case (p (S.trim  acc)) of
+        Just v -> pure v
+        Nothing -> fail "Error"
+    go n' acc = do
+      s <- (try nonSpace <|> try separator)
+      go (n' - 1) (acc <> s)
+
+isSpace :: String -> Boolean
+isSpace s = s == "\n" || s == "\r" || s == " " || s == "\t"
