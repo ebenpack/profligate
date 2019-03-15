@@ -6,7 +6,7 @@ import Data.Date as Date
 import Data.DateTime as DateTime
 import Data.Either (Either(..), isRight)
 import Data.Enum (toEnum)
-import Data.List (fromFoldable)
+import Data.List (List(..), fromFoldable)
 import Data.Maybe (Maybe(..), fromJust)
 import Data.Time as Time
 import Effect (Effect)
@@ -72,6 +72,7 @@ test_parseProfFile f = describe "parseDateTime" $ do
                         , src: "app/Main.hs:(77,1)-(80,27)"
                         , time: 0.0
                         , alloc: 6.2}]
+        let costCenterStack = Nil
         actual `shouldEqual` 
             (Right { timestamp : dateTime
                     , title : "hasktest exe +RTS -N -p -RTS"
@@ -82,6 +83,7 @@ test_parseProfFile f = describe "parseDateTime" $ do
                                   }
                     , totalAlloc : 164784
                     , perCostCenterCosts: perCostCenterCosts
+                    , costCenterStack: costCenterStack
                     })
 
 -- test_parseDateTime = 
