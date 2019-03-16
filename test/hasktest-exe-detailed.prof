@@ -1,4 +1,4 @@
-	Thu Mar 14 19:45 2019 Time and Allocation Profiling Report  (Final)
+  Mon Mar 11 07:33 2019 Time and Allocation Profiling Report  (Final)
 
 	   hasktest exe +RTS foo +RTS -N -p -P -RTS
 
