@@ -1,6 +1,6 @@
 {
   "private": true,
-  "name": "purescript-halogen-template",
+  "name": "profligate",
   "ignore": [
     "**/.*",
     "node_modules",
