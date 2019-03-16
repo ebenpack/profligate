@@ -1,10 +1,10 @@
 module Prof where
 
+import Prelude
 
 import Data.DateTime (DateTime)
 import Data.List (List)
 import Data.Maybe (Maybe)
-import Prelude (class Eq, class Show, show, (<>))
 
 newtype Tree a = Node { value :: a
                       , children :: Forest a 
@@ -23,10 +23,13 @@ type TotalTime =
     , interval :: Int
     , processors :: Int
     }
+
 type CostCenter l =
     { name :: String
     , mod :: String
     , src :: String
+    , ticks :: Maybe Int
+    , bytes :: Maybe Int
     | l
     }
 
@@ -37,8 +40,6 @@ type CostCenterStackCosts = CostCenter
     , entries :: Int
     , individual :: { time :: Number , alloc :: Number }
     , inherited :: { time :: Number , alloc :: Number }
-    , ticks :: Maybe Int
-    , bytes :: Maybe Int
     )
 
 type Profile =
