@@ -1,6 +1,4 @@
 module ParseProf where
-
-import Debug.Trace
 import Prelude
 
 import Control.Alternative ((<|>))
@@ -21,8 +19,6 @@ import Prof (Tree(..), Forest, TotalTime, PerCostCenterCosts, CostCenterStackCos
 import Text.Parsing.StringParser (Parser, fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
 import Text.Parsing.StringParser.Combinators (option, many1, manyTill, many)
-
-import Debug.Trace
 
 type CostCenterCostsColumnWidths l =
     { name :: Int
