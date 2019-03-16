@@ -2,6 +2,7 @@ module ParseProf where
 
 import Prelude
 
+import Prof (Tree(..), Forest, TotalTime, PerCostCenterCosts, CostCenterStackCosts, Profile)
 import Control.Alternative ((<|>))
 import Data.Array as Array
 import Data.Date.Component (Day, Month(..), Year)
@@ -20,19 +21,6 @@ import Text.Parsing.StringParser (Parser, fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
 import Text.Parsing.StringParser.Combinators (option, many1, manyTill, many)
 
-type TotalTime =
-    { time :: Number
-    , ticks :: Int
-    , interval :: Int
-    , processors :: Int
-    }
-type CostCenter l =
-    { name :: String
-    , mod :: String
-    , src :: String
-    | l
-    }
-
 type CostCenterCostsColumnWidths l =
     { costCenter :: Int
     , mod :: Int
@@ -40,20 +28,9 @@ type CostCenterCostsColumnWidths l =
     | l
     }
 
-type PerCostCenterCosts = CostCenter (time :: Number , alloc :: Number)
-
 type PerCostCenterCostsColumnWidths = CostCenterCostsColumnWidths 
     ( time :: Int
     , alloc :: Int
-    )
-
-type CostCenterStackCosts = CostCenter
-    ( number :: Int
-    , entries :: Int
-    , individual :: { time :: Number , alloc :: Number }
-    , inherited :: { time :: Number , alloc :: Number }
-    , ticks :: Maybe Number
-    , bytes :: Maybe Number
     )
 
 type CostCenterStackColumnWidths = CostCenterCostsColumnWidths
@@ -67,28 +44,9 @@ type CostCenterStackColumnWidths = CostCenterCostsColumnWidths
 
 type CostCenterStackCostsWithDepth = { depth :: Int, stack :: CostCenterStackCosts }
 
-type Profile =
-    { timestamp :: DateTime
-    , title     :: String
-    , totalTime :: TotalTime
-    , totalAlloc :: Int
-    , perCostCenterCosts :: List PerCostCenterCosts
-    , costCenterStack :: Forest CostCenterStackCosts
-    }
-
-newtype Tree a = Node { value :: a
-                      , children :: Forest a 
-                      }
-
-type Forest a = List (Tree a)
-
-derive instance eqTree :: (Eq a) => Eq (Tree a)
-
-instance showTree :: (Show a) => Show (Tree a) where
-  show (Node { value: a, children: t }) = "Node " <> show a <> show t
+-- Prof file
 
 -- https://github.com/ghc/ghc/blob/6aaa0655a721605740f23e49c5b4bf6165bfe865/docs/users_guide/profiling.rst#id13
-
 -- https://github.com/ghc/ghc/blob/1c2c2d3dfd4c36884b22163872feb87122b4528d/rts/ProfilerReport.c#L284
 
 parseProfFile :: Parser Profile
@@ -108,18 +66,113 @@ parseProfFile = do
         , costCenterStack: costCenterStackTree
         }
 
+-- Timestamp
+
+-- https://github.com/ghc/ghc/blob/21f0f56164f50844c2150c62f950983b2376f8b6/rts/RtsUtils.c#L160
+-- https://en.cppreference.com/w/c/chrono/ctime
+
+parseDateTime :: Parser DateTime
+parseDateTime = do
+    month <- parseWeekDay *> skipSpaces *> parseMonth
+    day <- skipSpaces *> parseDay
+    time <- skipSpaces *> parseTime
+    year <- skipSpaces *> parseYear <* skipSpaces
+    pure $ DateTime (canonicalDate year month day) time
+
+-- Title
+
+parseHeader :: Parser Unit
+parseHeader = do
+    string "Time and Allocation Profiling Report" *>
+    skipSpaces *> 
+    string "(Final)" *>
+    skipSpaces *>
+    pure unit
+
+parseTitle :: Parser String
+parseTitle = do
+    title <- skipSpaces *> manyTill anyChar eol
+    pure $ fromCharArray $ Array.fromFoldable title
+
+-- Total time
+
+parseTotalTime :: Parser TotalTime
+parseTotalTime = do
+    time <- skipSpaces *> string "total time" *>
+            skipSpaces *> string "=" *>
+            skipSpaces *> parseFloat <*
+            skipSpaces <* string "secs"
+    { ticks: ticks, interval: interval, processors: processors } <- do
+        ticks <- skipSpaces *> string "(" *> parseInteger <* skipSpaces <* string "ticks @" <* skipSpaces
+        interval <- parseInteger <* skipSpaces <* string "us," <* skipSpaces
+        processors <- parseInteger <* skipSpaces <* string "processors)" <* skipSpaces
+        pure { ticks: ticks, interval: interval, processors: processors }
+    pure { time: time, ticks: ticks, interval: interval, processors: processors }
+
+-- Total alloc
+
+parseTotalAlloc :: Parser Int
+parseTotalAlloc = 
+    skipSpaces *> string "total alloc" *> 
+    skipSpaces *> string "=" *> 
+    skipSpaces *> parseIntegerWithCommas <* 
+    skipSpaces <* string "bytes" <* 
+    skipSpaces <* string "(excludes profiling overheads)" <* skipSpaces
+
+-- Per cost center costs
+
+-- TODO: Rename
+parsePerCostCenterCosts :: Parser (List PerCostCenterCosts)
+parsePerCostCenterCosts = do
+    widths <- skipSpaces *> parseCostCenterCostHeader
+    _ <- skipSpaces
+    ls <- many (parsePerCostCenterCostsLine widths <* eol)
+    pure ls
+
+parseCostCenterCostHeader :: Parser PerCostCenterCostsColumnWidths
+parseCostCenterCostHeader = do
+    cs <- countWidth $ string "COST CENTRE" 
+    m <- countWidth $ string "MODULE"
+    src <- countWidth $ string "SRC"
+    time <- countWidth $ string "%time"
+    alloc <- countWidth $ string "%alloc"
+    pure $ 
+        { costCenter: cs
+        , mod: m
+        , src: src
+        , time: time
+        , alloc: alloc
+        }
+
+parsePerCostCenterCostsLine :: PerCostCenterCostsColumnWidths -> Parser PerCostCenterCosts
+parsePerCostCenterCostsLine { costCenter: cs, mod: m, src: src, time: time, alloc: alloc } = do
+    name <- takeN cs justString
+    mod <- takeN m justString
+    s <- takeN src justString
+    t <- takeN time justNum
+    a <- takeN alloc justNum
+    pure $
+        { name: name
+        , mod: mod
+        , src: s
+        , time: t
+        , alloc: a
+        }
+
+-- Cost center stack costs
+
 parseCostCenterStack :: Parser (Forest CostCenterStackCosts)
 parseCostCenterStack = do
     _ <- skipSpaces *> string "individual" *> skipSpaces *> string "inherited" *> eol
     widths <- parseCostCenterStackHeader
     _ <- skipSpaces
     cs <- many (parseCostCenterStackLine widths <* eol)
-    pure $ reversifyTree $ treeify $ reverse cs -- TODO: This is not optimal
+    pure $ reverseTree $ treeify $ reverse cs -- TODO: This is not optimal
     where
     treeify :: List CostCenterStackCostsWithDepth -> Forest CostCenterStackCosts
     treeify cs = foldr (\c t -> insert c t 0) Nil cs
-    reversifyTree :: Forest CostCenterStackCosts -> Forest CostCenterStackCosts
-    reversifyTree ts = map (\(Node { value: a, children: t}) -> Node { value: a, children: reversifyTree t }) (reverse ts)
+    reverseTree :: Forest CostCenterStackCosts -> Forest CostCenterStackCosts
+    reverseTree ts = map (\(Node { value: a, children: t}) -> Node { value: a, children: reverseTree t }) (reverse ts)
     insert :: CostCenterStackCostsWithDepth -> Forest CostCenterStackCosts -> Int -> Forest CostCenterStackCosts
     insert c Nil d = (Node { value: c.stack, children: Nil} : Nil)
     insert c (n@(Node { value: a, children: cs}):ts) d = 
@@ -164,51 +217,6 @@ parseCostCenterStackHeader = do
         b <- option 0 (countWidth $ string "bytes")
         pure { ticks: t, bytes: b }
 
-
--- TODO: Rename
-parsePerCostCenterCosts :: Parser (List PerCostCenterCosts)
-parsePerCostCenterCosts = do
-    widths <- skipSpaces *> parseCostCenterCostHeader
-    _ <- skipSpaces
-    ls <- many (parsePerCostCenterCostsLine widths <* eol)
-    pure ls
-
-
-parseCostCenterCostHeader :: Parser PerCostCenterCostsColumnWidths
-parseCostCenterCostHeader = do
-    cs <- countWidth $ string "COST CENTRE" 
-    m <- countWidth $ string "MODULE"
-    src <- countWidth $ string "SRC"
-    time <- countWidth $ string "%time"
-    alloc <- countWidth $ string "%alloc"
-    pure $ 
-        { costCenter: cs
-        , mod: m
-        , src: src
-        , time: time
-        , alloc: alloc
-        }
-
-parsePerCostCenterCostsLine :: PerCostCenterCostsColumnWidths -> Parser PerCostCenterCosts
-parsePerCostCenterCostsLine { costCenter: cs, mod: m, src: src, time: time, alloc: alloc } = do
-    name <- takeN cs justString
-    mod <- takeN m justString
-    s <- takeN src justString
-    t <- takeN time justNum
-    a <- takeN alloc justNum
-    pure $
-        { name: name
-        , mod: mod
-        , src: s
-        , time: t
-        , alloc: a
-        }
-    where
-    justString :: String -> Maybe String
-    justString s = Just $ S.trim s
-    justNum :: String -> Maybe Number
-    justNum s = Num.fromString $ S.trim s
-
 -- TODO: Rename
 parseCostCenterStackLine :: CostCenterStackColumnWidths -> Parser CostCenterStackCostsWithDepth
 parseCostCenterStackLine
@@ -247,76 +255,24 @@ parseCostCenterStackLine
             , depth: depth
             }
         where
+        parseEnd :: Parser ({ inhA :: Number, ticks :: Maybe Int, bytes :: Maybe Int })
         parseEnd = (try parseDetailed <|> parseRegular)
+        parseDetailed :: Parser ({ inhA :: Number, ticks :: Maybe Int, bytes :: Maybe Int })
         parseDetailed = do
             inhA <- takeN inheritedAlloc justNum
-            t <- takeN ticks justNum
-            b <- takeN (bytes - 1) justNum -- TODO: <- this seems wrong
+            t <- takeN ticks justInt
+            b <- takeN (bytes - 1) justInt -- TODO: <- `(bytes - 1)` seems wrong
             pure { inhA: inhA, ticks: Just t, bytes: Just b }
+        parseRegular :: Parser ({ inhA :: Number, ticks :: Maybe Int, bytes :: Maybe Int })
         parseRegular = do
-            inhA <- takeN (inheritedAlloc - 1) justNum -- TODO: <- this also seems wrong
+            inhA <- takeN (inheritedAlloc - 1) justNum -- TODO: <- `(inheritedAlloc - 1)` also seems wrong
             pure { inhA: inhA, ticks: Nothing, bytes: Nothing }
         justDepthAndName :: String -> Maybe ({ name :: String,  depth :: Int })
         justDepthAndName s = 
             let depth = countPrefix (\c -> c == (codePointFromChar ' ')) s
             in pure { name: S.trim s, depth: depth }
-        justString :: String -> Maybe String
-        justString s = Just $ S.trim s
-        justNum :: String -> Maybe Number
-        justNum s = Num.fromString $ S.trim s
-        justInt :: String -> Maybe Int
-        justInt s = fromString $ S.trim s
 
--- 	total alloc =     164,784 bytes  (excludes profiling overheads)
-parseTotalAlloc :: Parser Int
-parseTotalAlloc = 
-    skipSpaces *> string "total alloc" *> 
-    skipSpaces *> string "=" *> 
-    skipSpaces *> parseIntegerWithCommas <* 
-    skipSpaces <* string "bytes" <* 
-    skipSpaces <* string "(excludes profiling overheads)" <* skipSpaces
-    
-
--- COST CENTRE MODULE           SRC                         %time %alloc
-
--- MAIN        MAIN             <built-in>                    0.0   68.8
-
-parseTotalTime :: Parser TotalTime
-parseTotalTime = do
-    time <- skipSpaces *> string "total time" *>
-            skipSpaces *> string "=" *>
-            skipSpaces *> parseFloat <*
-            skipSpaces <* string "secs"
-    { ticks: ticks, interval: interval, processors: processors } <- do
-        ticks <- skipSpaces *> string "(" *> parseInteger <* skipSpaces <* string "ticks @" <* skipSpaces
-        interval <- parseInteger <* skipSpaces <* string "us," <* skipSpaces
-        processors <- parseInteger <* skipSpaces <* string "processors)" <* skipSpaces
-        pure { ticks: ticks, interval: interval, processors: processors }
-    pure { time: time, ticks: ticks, interval: interval, processors: processors }
-
-parseTitle :: Parser String
-parseTitle = do
-    title <- skipSpaces *> manyTill anyChar eol
-    pure $ fromCharArray $ Array.fromFoldable title
-
-parseHeader :: Parser Unit
-parseHeader = do
-    string "Time and Allocation Profiling Report" *>
-    skipSpaces *> 
-    string "(Final)" *>
-    skipSpaces *>
-    pure unit
-
--- https://github.com/ghc/ghc/blob/21f0f56164f50844c2150c62f950983b2376f8b6/rts/RtsUtils.c#L160
--- https://en.cppreference.com/w/c/chrono/ctime
--- ctime = Www Mmm dd hh:mm:ss yyyy\n
-parseDateTime :: Parser DateTime
-parseDateTime = do
-    month <- parseWeekDay *> skipSpaces *> parseMonth
-    day <- skipSpaces *> parseDay
-    time <- skipSpaces *> parseTime
-    year <- skipSpaces *> parseYear <* skipSpaces
-    pure $ DateTime (canonicalDate year month day) time
+-- Date/time helpers
 
 parseTime :: Parser Time
 parseTime = do
@@ -327,14 +283,13 @@ parseTime = do
         Just time -> pure time
         _ -> fail "Invalid time"
     where
+    convertTime :: Int -> Int -> Int -> Maybe Time 
     convertTime hours minutes seconds = do
         hours' <- toEnum hours
         minutes' <- toEnum minutes
         seconds' <- toEnum seconds
         milliseconds <- toEnum 0
         pure $ Time hours' minutes' seconds' milliseconds
-
---     Time Hour Minute Second Millisecond
 
 parseYear :: Parser Year
 parseYear = do
@@ -349,51 +304,6 @@ parseDay = do
     case (toEnum day) of
         Just day' -> pure day'
         _ -> fail "Invalid day"
-
-parseFloat :: Parser Number
-parseFloat = do
-    integer <- parseInteger
-    fractional <- option 0 $ string "." *> parseInteger
-    pure $ (toNumber integer) + (fractionalize $ toNumber fractional)
-    where
-    -- TODO: Use logs?
-    fractionalize :: Number -> Number
-    fractionalize n = if n > 1.0 then fractionalize (n / 10.0) else n
-
-parseIntegerWithCommas :: Parser Int
-parseIntegerWithCommas = do
-    ints <- getDigits'
-    convertDigits ints 0 (length ints)
-    where
-    nDigs 0 = pure Nil
-    nDigs n = do
-        d <- anyDigit
-        ds <- nDigs (n - 1)
-        pure (d:ds)
-    getDigits' = do
-        first <- (try (nDigs 3) <|> try (nDigs 2) <|> try (nDigs 1)) -- Not sure if/why these trys are necessary
-        rest <- many (char ',' *> nDigs 3)
-        pure $ first <> (concat rest)
-
-parseInteger :: Parser Int
-parseInteger = do
-    ds <- getDigits
-    convertDigits ds 0 (length ds)
-
-getDigits :: Parser (List Char)
-getDigits = do
-    ds <- many1 anyDigit
-    pure (toList ds)
-
-convertDigits :: List Char -> Int -> Int -> Parser Int
-convertDigits _ acc 0 = pure acc
-convertDigits Nil acc _ = pure acc
-convertDigits (d:ds) acc n' =
-    let p = (pow 10 (n' - 1)) in
-    case (fromString $ singleton d) of
-        Just d' -> convertDigits ds (acc + (d' * p)) (n' - 1)
-        _ -> fail "Invalid number"
-        
 
 parseWeekDay :: Parser Weekday
 parseWeekDay =
@@ -420,6 +330,56 @@ parseMonth =
     (string "Nov" *> pure November) <|>
     (string "Dec" *> pure December)
 
+-- Integer/number helpers
+
+parseFloat :: Parser Number
+parseFloat = do
+    integer <- parseInteger
+    fractional <- option 0 $ string "." *> parseInteger
+    pure $ (toNumber integer) + (fractionalize $ toNumber fractional)
+    where
+    -- TODO: Use logs?
+    fractionalize :: Number -> Number
+    fractionalize n = if n > 1.0 then fractionalize (n / 10.0) else n
+
+parseIntegerWithCommas :: Parser Int
+parseIntegerWithCommas = do
+    ints <- getDigits'
+    convertDigits ints 0 (length ints)
+    where
+    nDigs :: Int -> Parser (List Char)
+    nDigs 0 = pure Nil
+    nDigs n = do
+        d <- anyDigit
+        ds <- nDigs (n - 1)
+        pure (d:ds)
+    getDigits' :: Parser (List Char)
+    getDigits' = do
+        first <- (try (nDigs 3) <|> try (nDigs 2) <|> try (nDigs 1)) -- Not sure if/why these trys are necessary
+        rest <- many (char ',' *> nDigs 3)
+        pure $ first <> (concat rest)
+
+parseInteger :: Parser Int
+parseInteger = do
+    ds <- getDigits
+    convertDigits ds 0 (length ds)
+
+getDigits :: Parser (List Char)
+getDigits = do
+    ds <- many1 anyDigit
+    pure (toList ds)
+
+convertDigits :: List Char -> Int -> Int -> Parser Int
+convertDigits _ acc 0 = pure acc
+convertDigits Nil acc _ = pure acc
+convertDigits (d:ds) acc n' =
+    let p = (pow 10 (n' - 1)) in
+    case (fromString $ singleton d) of
+        Just d' -> convertDigits ds (acc + (d' * p)) (n' - 1)
+        _ -> fail "Invalid number"
+
+-- Parser/conversion helpers
+
 blankLine :: Parser Unit
 blankLine = many separator *> eol *> pure unit
 
@@ -443,6 +403,7 @@ nonSpace = do
 takeN :: forall a. Int -> (String -> Maybe a) -> Parser a
 takeN n p = go n ""
     where
+    go :: Int -> String -> Parser a
     go 0 acc = case (p  acc) of
         Just v -> pure v
         Nothing -> fail "Error"
@@ -459,3 +420,12 @@ countWidth p = do
 
 isSpace :: String -> Boolean
 isSpace s = s == "\n" || s == "\r" || s == " " || s == "\t"
+
+justString :: String -> Maybe String
+justString s = Just $ S.trim s
+
+justNum :: String -> Maybe Number
+justNum s = Num.fromString $ S.trim s
+
+justInt :: String -> Maybe Int
+justInt s = fromString $ S.trim s
