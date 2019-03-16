@@ -11,18 +11,14 @@ import Data.Foldable (foldr)
 import Data.Int (fromString, pow, toNumber)
 import Data.List (List(..), (:), length, concat, reverse)
 import Data.List.NonEmpty (toList)
-import Data.Map (Map(..), empty, lookup, insert, fromFoldable)
 import Data.Maybe (Maybe(..))
 import Data.Number as Num
 import Data.String as S
 import Data.String.CodePoints (countPrefix, codePointFromChar)
 import Data.String.CodeUnits (fromCharArray, singleton)
-import Data.Tuple (Tuple(..))
-import Data.Tuple.Nested (Tuple5(..), T5, tuple5)
 import Text.Parsing.StringParser (Parser, fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
-import Text.Parsing.StringParser.Combinators (option, optionMaybe, sepBy1, many1, manyTill, many)
-import Web.HTML.History (go)
+import Text.Parsing.StringParser.Combinators (option, many1, manyTill, many)
 
 type TotalTime =
     { time :: Number

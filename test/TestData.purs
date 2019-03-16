@@ -1,8 +1,8 @@
 module TestData where
 
-import Data.List
-import Data.Maybe
-import ParseProf
+import Data.List (List(..), (:))
+import Data.Maybe (Maybe(..))
+import ParseProf (CostCenterStackCosts, Forest, Tree(..))
 
 costCenterStackCosts :: Forest CostCenterStackCosts
 costCenterStackCosts =
