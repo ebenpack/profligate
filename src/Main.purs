@@ -1,6 +1,7 @@
 module Main where
 
-import Prelude (Unit, bind, unit)
+import Prelude
+
 import Effect (Effect)
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
