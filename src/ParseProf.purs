@@ -9,7 +9,7 @@ import Data.DateTime (DateTime(..), Time(..), Weekday(..), canonicalDate)
 import Data.Enum (toEnum)
 import Data.Foldable (foldr)
 import Data.Int (fromString, pow, toNumber)
-import Data.List (List(..), (:), length, concat)
+import Data.List (List(..), (:), length, concat, reverse)
 import Data.List.NonEmpty (toList)
 import Data.Map (Map(..), empty, lookup, insert, fromFoldable)
 import Data.Maybe (Maybe(..))
@@ -69,19 +69,7 @@ type CostCenterStackColumnWidths = CostCenterCostsColumnWidths
     , bytes :: Int
     )
 
--- newtype Tree a = Node { value :: a
---                       , children :: Forest a 
---                       }
-
--- type Forest a = List (Tree a)
-
-
--- derive instance eqTree :: (Eq a) => Eq (Tree a)
-
--- instance showTree :: (Show a) => Show (Tree a) where
---   show Empty = "Empty"
---   show (Node a t) = "Node " <> show a <> show t
-
+type CostCenterStackCostsWithDepth = { depth :: Int, stack :: CostCenterStackCosts }
 
 type Profile =
     { timestamp :: DateTime
@@ -89,8 +77,19 @@ type Profile =
     , totalTime :: TotalTime
     , totalAlloc :: Int
     , perCostCenterCosts :: List PerCostCenterCosts
-    , costCenterStack :: (List ({ depth:: Int, stack :: CostCenterStackCosts }))
+    , costCenterStack :: Forest CostCenterStackCosts
     }
+
+newtype Tree a = Node { value :: a
+                      , children :: Forest a 
+                      }
+
+type Forest a = List (Tree a)
+
+derive instance eqTree :: (Eq a) => Eq (Tree a)
+
+instance showTree :: (Show a) => Show (Tree a) where
+  show (Node { value: a, children: t }) = "Node " <> show a <> show t
 
 -- https://github.com/ghc/ghc/blob/6aaa0655a721605740f23e49c5b4bf6165bfe865/docs/users_guide/profiling.rst#id13
 
@@ -113,22 +112,24 @@ parseProfFile = do
         , costCenterStack: costCenterStackTree
         }
 
-parseCostCenterStack :: Parser (List ({ depth:: Int, stack :: CostCenterStackCosts })) -- (List CostCenterStackCosts)
+parseCostCenterStack :: Parser (Forest CostCenterStackCosts)
 parseCostCenterStack = do
     _ <- skipSpaces *> string "individual" *> skipSpaces *> string "inherited" *> eol
     widths <- parseCostCenterStackHeader
     _ <- skipSpaces
     cs <- many (parseCostCenterStackLine widths <* eol)
-    pure cs
-    -- where
-    -- treeify :: List CostCenterStackCosts -> Tree CostCenterStackCosts
-    -- treeify cs = foldr (\c t -> insert c t 1) Empty cs
-    -- insert :: { depth :: Int, stack :: CostCenterStackCosts } -> Tree CostCenterStackCosts -> Int -> Tree CostCenterStackCosts
-    -- insert c Empty d = Node c.stack Nil
-    -- insert c (Node a t) d = 
-    --     if d == c.depth 
-    --     then Node a ((insert c t) : t)
-    --     else Empty
+    pure $ reversifyTree $ treeify $ reverse cs -- TODO: This is not optimal
+    where
+    treeify :: List CostCenterStackCostsWithDepth -> Forest CostCenterStackCosts
+    treeify cs = foldr (\c t -> insert c t 0) Nil cs
+    reversifyTree :: Forest CostCenterStackCosts -> Forest CostCenterStackCosts
+    reversifyTree ts = map (\(Node { value: a, children: t}) -> Node { value: a, children: reversifyTree t }) (reverse ts)
+    insert :: CostCenterStackCostsWithDepth -> Forest CostCenterStackCosts -> Int -> Forest CostCenterStackCosts
+    insert c Nil d = (Node { value: c.stack, children: Nil} : Nil)
+    insert c (n@(Node { value: a, children: cs}):ts) d = 
+        if d == c.depth
+        then (Node { value: c.stack, children: Nil} : n : ts)
+        else (Node { value: a, children: (insert c cs (d + 1)) } : ts)
 
 -- TODO: Rename
 parseCostCenterStackHeader :: Parser CostCenterStackColumnWidths
@@ -213,7 +214,7 @@ parsePerCostCenterCostsLine { costCenter: cs, mod: m, src: src, time: time, allo
     justNum s = Num.fromString $ S.trim s
 
 -- TODO: Rename
-parseCostCenterStackLine :: CostCenterStackColumnWidths -> Parser { depth:: Int, stack :: CostCenterStackCosts }
+parseCostCenterStackLine :: CostCenterStackColumnWidths -> Parser CostCenterStackCostsWithDepth
 parseCostCenterStackLine
     { costCenter: cs
     , mod: m
