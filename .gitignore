@@ -12,6 +12,4 @@ output
 /output/
 /dist/app.js
 package-lock.json
-
-
-
+.DS_Store
