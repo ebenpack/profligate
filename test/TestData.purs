@@ -10,7 +10,6 @@ import Data.Maybe (Maybe(..), fromJust)
 import Data.Time as Time
 import Partial.Unsafe (unsafePartial)
 import Prof (CostCenterStackCosts, PerCostCenterCosts, Forest, Tree(..))
-import ParseProf (PerCostCenterCostsColumnWidths, CostCenterStackColumnWidths)
 
 dateTime :: DateTime.DateTime
 dateTime =
@@ -35,26 +34,14 @@ detailedPerCostCenterCosts = fromFoldable
     , { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Just 0, bytes: Just 10272 }
     ]
 
-simplePerCostCenterCostsColumnWidth :: PerCostCenterCostsColumnWidths
-simplePerCostCenterCostsColumnWidth = { name: 12, mod: 17, src: 28, time: 5, alloc: 7, ticks: 0, bytes: 0 }
-
 simplePerCostCenterCostsLine :: PerCostCenterCosts
 simplePerCostCenterCostsLine = { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Nothing, bytes: Nothing }
-
-detailedPerCostCenterCostsColumnWidth :: PerCostCenterCostsColumnWidths
-detailedPerCostCenterCostsColumnWidth = { name: 12, mod: 17, src: 28, time: 5, alloc: 7, ticks: 7, bytes: 10 }
 
 detailedPerCostCenterCostsLine :: PerCostCenterCosts
 detailedPerCostCenterCostsLine = { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Just 0, bytes: Just 10272 }
 
-simpleCostCenterStackCostsColumnWidth :: CostCenterStackColumnWidths
-simpleCostCenterStackCostsColumnWidth = { name: 13, mod: 22, src: 27, number: 9, entries: 7, individual: { time: 7, alloc: 7 }, inherited: { time: 8, alloc: 7 }, ticks: 0, bytes: 0 }
-
 simpleCostCenterStackCostsLine :: CostCenterStackCosts
 simpleCostCenterStackCostsLine = { name: "fib'.go", mod: "Main", src: "app/Main.hs:(72,5)-(74,51)", number: 2492, entries: 31, individual: { alloc: 0.6, time: 0.0 }, inherited: { alloc: 0.6, time: 0.0 }, ticks: Nothing, bytes: Nothing }
-
-detailedCostCenterStackCostsColumnWidth :: CostCenterStackColumnWidths
-detailedCostCenterStackCostsColumnWidth = { name: 13, mod: 22, src: 27, number: 9, entries: 7, individual: { time: 7, alloc: 7 }, inherited: { time: 8, alloc: 7 }, ticks: 7, bytes: 10 }
 
 detailedCostCenterStackCostsLine :: CostCenterStackCosts
 detailedCostCenterStackCostsLine = { name: "fib'.go", mod: "Main", src: "app/Main.hs:(72,5)-(74,51)", number: 2492, entries: 31, individual: { alloc: 0.6, time: 0.0 }, inherited: { alloc: 0.6, time: 0.0 }, ticks: Just 0, bytes: Just 928 }
