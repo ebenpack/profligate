@@ -1,4 +1,4 @@
-module TestData where
+module Test.Profile.TestData where
 
 import Prelude
 
@@ -9,7 +9,7 @@ import Data.List (List(..), (:), fromFoldable)
 import Data.Maybe (Maybe(..), fromJust)
 import Data.Time as Time
 import Partial.Unsafe (unsafePartial)
-import Prof (CostCenterStackCosts, PerCostCenterCosts, Forest, Tree(..))
+import Profligate.Profile.Profile (CostCenterStackCosts, PerCostCenterCosts, Forest, Tree(..))
 
 dateTime :: DateTime.DateTime
 dateTime =
@@ -26,8 +26,8 @@ simplePerCostCenterCosts = fromFoldable
     , { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Nothing, bytes: Nothing }
     ]
 
-detailedPerCostCenterCosts :: List PerCostCenterCosts
-detailedPerCostCenterCosts = fromFoldable 
+verbosePerCostCenterCosts :: List PerCostCenterCosts
+verbosePerCostCenterCosts = fromFoldable 
     [ { name: "MAIN", mod: "MAIN", src: "<built-in>", time: 100.0, alloc: 68.8, ticks: Just 2, bytes: Just 113160 }
     , { name: "CAF" , mod: "GHC.IO.Handle.FD" , src: "<entire-module>" , time: 0.0 , alloc: 21.1, ticks: Just 0, bytes: Just 34704 }
     , { name: "CAF", mod: "GHC.IO.Encoding", src: "<entire-module>", time: 0.0, alloc: 1.7, ticks: Just 0, bytes: Just 2768 }
@@ -37,14 +37,14 @@ detailedPerCostCenterCosts = fromFoldable
 simplePerCostCenterCostsLine :: PerCostCenterCosts
 simplePerCostCenterCostsLine = { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Nothing, bytes: Nothing }
 
-detailedPerCostCenterCostsLine :: PerCostCenterCosts
-detailedPerCostCenterCostsLine = { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Just 0, bytes: Just 10272 }
+verbosePerCostCenterCostsLine :: PerCostCenterCosts
+verbosePerCostCenterCostsLine = { name: "main", mod: "Main", src: "app/Main.hs:(77,1)-(80,27)", time: 0.0, alloc: 6.2, ticks: Just 0, bytes: Just 10272 }
 
 simpleCostCenterStackCostsLine :: CostCenterStackCosts
 simpleCostCenterStackCostsLine = { name: "fib'.go", mod: "Main", src: "app/Main.hs:(72,5)-(74,51)", number: 2492, entries: 31, individual: { alloc: 0.6, time: 0.0 }, inherited: { alloc: 0.6, time: 0.0 }, ticks: Nothing, bytes: Nothing }
 
-detailedCostCenterStackCostsLine :: CostCenterStackCosts
-detailedCostCenterStackCostsLine = { name: "fib'.go", mod: "Main", src: "app/Main.hs:(72,5)-(74,51)", number: 2492, entries: 31, individual: { alloc: 0.6, time: 0.0 }, inherited: { alloc: 0.6, time: 0.0 }, ticks: Just 0, bytes: Just 928 }
+verboseCostCenterStackCostsLine :: CostCenterStackCosts
+verboseCostCenterStackCostsLine = { name: "fib'.go", mod: "Main", src: "app/Main.hs:(72,5)-(74,51)", number: 2492, entries: 31, individual: { alloc: 0.6, time: 0.0 }, inherited: { alloc: 0.6, time: 0.0 }, ticks: Just 0, bytes: Just 928 }
 
 simpleCostCenterStackCosts :: Forest CostCenterStackCosts
 simpleCostCenterStackCosts =
@@ -143,8 +143,8 @@ simpleCostCenterStackCosts =
     : Nil
     )
 
-detailedCostCenterStackCosts :: Forest CostCenterStackCosts
-detailedCostCenterStackCosts =
+verboseCostCenterStackCosts :: Forest CostCenterStackCosts
+verboseCostCenterStackCosts =
     ( Node 
         { value: { bytes: Just 113160, entries: 0, individual: { alloc: 68.8, time: 100.0 }, inherited: { alloc: 100.0, time: 100.0 }, mod: "MAIN", name: "MAIN", number: 1242, src: "<built-in>", ticks: Just 2 }
         , children:

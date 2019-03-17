@@ -1,40 +1,33 @@
-module Component where
+module Profligate.Component where
 
 import Prelude
 
 import Data.Either (Either(..))
-import Foreign (unsafeFromForeign)
 import Data.Maybe (Maybe(..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
+import Foreign (unsafeFromForeign)
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Core as HHC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.EventSource as HES
-import ParseProf (parseProfFile)
-import Prof (Profile)
+import Halogen.VDom.Types as HVT
+import Profligate.Profile.ParseProfile (parseProfFile)
+import Profligate.State (DisplayMode(..), Query(..), State)
+import Profligate.FlameGraph (flameGraph)
 import Text.Parsing.StringParser (runParser, ParseError(..))
 import Web.Event.Event (EventType(..), preventDefault, stopPropagation)
 import Web.Event.EventTarget (addEventListener, eventListener)
 import Web.File.Blob (Blob)
 import Web.File.File (toBlob)
 import Web.File.FileList (item)
-import Web.File.FileReader (FileReader, result, fileReader, readAsText, toEventTarget)
+import Web.File.FileReader (result, fileReader, readAsText, toEventTarget)
 import Web.HTML.Event.DataTransfer (DataTransfer, files)
-import Web.HTML.Event.DragEvent (DragEvent, dataTransfer, toEvent)
+import Web.HTML.Event.DragEvent (dataTransfer, toEvent)
 
 
-data Query a =
-      UploadFile DragEvent a
-    | FileLoaded FileReader a
-    | DragOver DragEvent a
-    | NoOp a
-
-type State = 
-    { profFile :: Maybe Profile
-    , parseError :: Maybe String
-    }
 
 component :: forall m. MonadEffect m => MonadAff m => H.Component HH.HTML Query Unit Void m
 component =
@@ -49,13 +42,14 @@ component =
     initialState =
         { profFile: Nothing
         , parseError : Nothing
+        , displayMode : FlameGraph
         }
 
     itemStyle :: forall r i. String -> HP.IProp ( style :: String | r ) i
     itemStyle = HP.attr (H.AttrName "style")
 
     dropzone :: H.ComponentHTML Query
-    dropzone = 
+    dropzone =
         HH.div
             [ HE.onDragOver (\e -> Just $ H.action (DragOver e))
             , HE.onDrop (\e -> Just $ H.action (UploadFile e))
@@ -70,8 +64,11 @@ component =
             , dropzone
             , HH.div_
                 [ HH.h2_ [ HH.text "DEBUG" ]
-                , HH.div_ [ HH.text "Profile: ", profileDebug ]
-                , HH.div_ [ HH.text "Error: ", errorDebug ]
+                -- , HH.div_ [ HH.text "Profile: ", profileDebug ]
+                -- , HH.div_ [ HH.text "Error: ", errorDebug ]
+                , case state.profFile of
+                    Just p -> flameGraph p
+                    Nothing -> HH.div_ [ HH.text "" ]
                 ]
             ]
         where
@@ -87,6 +84,9 @@ component =
     eval :: Query ~> H.ComponentDSL State Query Void m
     eval = case _ of
         NoOp next -> do
+            pure next
+        ChangeDisplayMode mode next -> do
+            _ <- H.modify $ \state -> state { displayMode = mode }
             pure next
         FileLoaded fr next -> do
             t <- H.liftEffect $ result fr
@@ -120,13 +120,13 @@ component =
         bindLoad trgt f = do
             el <- (eventListener f)
             addEventListener (EventType "load") el false trgt
-    
+
         subthingy trgt fr =
             H.subscribe $ H.eventSource (bindLoad trgt) handleLoad
             where
             -- handleLoad
             handleLoad e = pure $ FileLoaded fr $ HES.Done
-    
+
 getFile :: DataTransfer -> Maybe Blob
 getFile dt = do
     fl <- files dt

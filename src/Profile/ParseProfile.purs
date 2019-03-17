@@ -1,4 +1,5 @@
-module ParseProf where
+module Profligate.Profile.ParseProfile where
+
 import Prelude
 
 import Control.Alternative ((<|>))
@@ -15,7 +16,7 @@ import Data.Number as Num
 import Data.String as S
 import Data.String.CodePoints (countPrefix, codePointFromChar)
 import Data.String.CodeUnits (fromCharArray, singleton)
-import Prof (Tree(..), Forest, TotalTime, PerCostCenterCosts, CostCenterStackCosts, Profile)
+import Profligate.Profile.Profile (Tree(..), Forest, TotalTime, PerCostCenterCosts, CostCenterStackCosts, Profile)
 import Text.Parsing.StringParser (Parser, fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
 import Text.Parsing.StringParser.Combinators (between, option, many1, manyTill, many)

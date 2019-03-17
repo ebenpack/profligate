@@ -6,8 +6,7 @@ import Effect (Effect)
 import Halogen.Aff as HA
 import Halogen.VDom.Driver (runUI)
 
-import Component (component)
--- import ParseProf
+import Profligate.Component (component)
 
 main :: Effect Unit
 main = HA.runHalogenAff do

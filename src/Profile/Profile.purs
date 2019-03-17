@@ -1,4 +1,4 @@
-module Prof where
+module Profligate.Profile.Profile where
 
 import Prelude
 
