@@ -18,28 +18,11 @@ import Data.String.CodeUnits (fromCharArray, singleton)
 import Prof (Tree(..), Forest, TotalTime, PerCostCenterCosts, CostCenterStackCosts, Profile)
 import Text.Parsing.StringParser (Parser, fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
-import Text.Parsing.StringParser.Combinators (option, many1, manyTill, many)
+import Text.Parsing.StringParser.Combinators (between, option, many1, manyTill, many)
 
-type CostCenterCostsColumnWidths l =
-    { name :: Int
-    , mod :: Int
-    , src :: Int
-    , ticks :: Int
-    , bytes :: Int
-    | l
+type CostCenterHeader  =
+    { costCenterVerbose :: Boolean
     }
-
-type PerCostCenterCostsColumnWidths = CostCenterCostsColumnWidths 
-    ( time :: Int
-    , alloc :: Int
-    )
-
-type CostCenterStackColumnWidths = CostCenterCostsColumnWidths
-    ( number :: Int
-    , entries :: Int
-    , individual :: { time :: Int , alloc :: Int }
-    , inherited :: { time :: Int , alloc :: Int }
-    )
 
 type CostCenterStackCostsWithDepth = { depth :: Int, stack :: CostCenterStackCosts }
 
@@ -54,8 +37,9 @@ parseProfFile = do
     title <- parseHeader *> skipSpaces *> parseTitle <* skipSpaces
     totalTime <- parseTotalTime <* skipSpaces
     totalAlloc <- parseTotalAlloc <* skipSpaces
-    perCostCenterCosts <- parsePerCostCenterCosts
-    costCenterStackTree <- parseCostCenterStack
+    csh <- skipSpaces *> parseCostCenterCostHeader
+    perCostCenterCosts <- parsePerCostCenterCosts csh
+    costCenterStackTree <- parseCostCenterStack csh
     pure $ 
         { timestamp: timestamp
         , title: title
@@ -104,7 +88,7 @@ parseTotalTime = do
     { ticks: ticks, interval: interval, processors: processors } <- do
         ticks <- skipSpaces *> string "(" *> parseInteger <* skipSpaces <* string "ticks @" <* skipSpaces
         interval <- parseInteger <* skipSpaces <* string "us," <* skipSpaces
-        processors <- parseInteger <* skipSpaces <* string "processors)" <* skipSpaces
+        processors <- parseInteger <* skipSpaces <* string "processor" <* option "" (string "s") <* string ")" <* skipSpaces
         pure { ticks: ticks, interval: interval, processors: processors }
     pure { time: time, ticks: ticks, interval: interval, processors: processors }
 
@@ -121,56 +105,48 @@ parseTotalAlloc =
 -- Per cost center costs
 
 -- TODO: Rename
-parsePerCostCenterCosts :: Parser (List PerCostCenterCosts)
-parsePerCostCenterCosts = do
-    widths <- skipSpaces *> parseCostCenterCostHeader
+parsePerCostCenterCosts :: CostCenterHeader -> Parser (List PerCostCenterCosts)
+parsePerCostCenterCosts csh = do
     _ <- skipSpaces
-    ls <- many (parsePerCostCenterCostsLine widths <* eol)
+    ls <- many ((parsePerCostCenterCostsLine csh) <* eol)
     pure ls
 
-parseCostCenterCostHeader :: Parser PerCostCenterCostsColumnWidths
+parseCostCenterCostHeader :: Parser CostCenterHeader
 parseCostCenterCostHeader = do
-    cs <- countWidth true $ string "COST CENTRE" 
-    m <- countWidth true $ string "MODULE"
-    src <- countWidth true $ string "SRC"
-    time <- countWidth false $ string "%time"
-    alloc <- countWidth false $ string "%alloc"
-    { bytes: b, ticks: t } <- parseHeaderOptionals
-    pure $ 
-        { name: cs
-        , mod: m
-        , src: src
-        , time: time
-        , alloc: alloc
-        , bytes: b
-        , ticks: t
-        }
+    cs <- parseHeaderColumn "COST CENTRE" 
+    m <- parseHeaderColumn "MODULE"
+    src <- parseHeaderColumn "SRC"
+    time <- parseHeaderColumn "%time"
+    alloc <- parseHeaderColumn "%alloc"
+    verbose <- parseHeaderOptionals
+    pure { costCenterVerbose: verbose }
 
-parsePerCostCenterCostsLine :: PerCostCenterCostsColumnWidths -> Parser PerCostCenterCosts
-parsePerCostCenterCostsLine { name: cs, mod: m, src: src, time: time, alloc: alloc, bytes: bytes, ticks: ticks } = do
-    name <- takeN cs justString
-    mod <- takeN m justString
-    s <- takeN src justString
-    t <- takeN time justNum
-    { alloc: a, ticks: ti, bytes: by } <- parseEnd alloc ticks bytes
+parsePerCostCenterCostsLine :: CostCenterHeader -> Parser PerCostCenterCosts
+parsePerCostCenterCostsLine { costCenterVerbose: verbose } = do
+    name <- parseRowColumn "name" justString
+    mod <- parseRowColumn "module" justString
+    src <- parseSrcColumn
+    time <- parseRowColumn "time" justNum
+    alloc <- parseRowColumn "alloc" justNum
+    { ticks: ticks, bytes: bytes } <- parseEnd verbose
     pure $
         { name: name
         , mod: mod
-        , src: s
-        , time: t
-        , alloc: a
-        , ticks: ti
-        , bytes: by
+        , src: src
+        , time: time
+        , alloc: alloc
+        , ticks: ticks
+        , bytes: bytes
         }
 
 -- Cost center stack costs
 
-parseCostCenterStack :: Parser (Forest CostCenterStackCosts)
-parseCostCenterStack = do
+parseCostCenterStack :: CostCenterHeader -> Parser (Forest CostCenterStackCosts)
+parseCostCenterStack csh@{ costCenterVerbose: verbose } = do
     _ <- skipSpaces *> string "individual" *> skipSpaces *> string "inherited" *> eol
-    widths <- parseCostCenterStackHeader <* eol
+    _ <- (parseCostCenterStackHeader csh) <* eol
     _ <- blankLine
-    cs <- many (parseCostCenterStackLine widths <* eol)
+    cs <- many (parseCostCenterStackLine csh <* eol)
     pure $ reverseTree $ treeify $ reverse cs -- TODO: This is not optimal
     where
     treeify :: List CostCenterStackCostsWithDepth -> Forest CostCenterStackCosts
@@ -185,77 +161,57 @@ parseCostCenterStack = do
         else (Node { value: a, children: (insert c cs (d + 1)) } : ts)
 
 -- TODO: Rename
-parseCostCenterStackHeader :: Parser CostCenterStackColumnWidths
-parseCostCenterStackHeader = do
-    cs <- countWidth true $ string "COST CENTRE" 
-    m <- countWidth true $ string "MODULE"
-    src <- countWidth true $ string "SRC"
-    no <- countWidth true $ string "no."
-    entries <- countWidth false $ string "entries"
-    individualTime <- countWidth false $ string "%time"
-    individualAlloc <- countWidth false $ string "%alloc"
-    inheritedTime <- countWidth false $ string "%time"
-    inheritedAlloc <- countWidth false $ string "%alloc"
-    { bytes: b, ticks: t } <- parseHeaderOptionals
-    pure $ 
-        { name: cs
-        , mod: m
-        , src: src
-        , number: no
-        , entries: entries
-        , individual:
-            { time: individualTime
-            , alloc: individualAlloc
-            }
-        , inherited:
-            { time: inheritedTime
-            , alloc: inheritedAlloc
-            }
-        , bytes: b
-        , ticks: t
-        }
+parseCostCenterStackHeader :: CostCenterHeader -> Parser Unit
+parseCostCenterStackHeader { costCenterVerbose: verbose } = do
+    cs <- parseHeaderColumn "COST CENTRE" 
+    m <- parseHeaderColumn "MODULE"
+    src <- parseHeaderColumn "SRC"
+    no <- parseHeaderColumn "no."
+    entries <- parseHeaderColumn "entries"
+    individualTime <- parseHeaderColumn "%time"
+    individualAlloc <- parseHeaderColumn "%alloc"
+    inheritedTime <- parseHeaderColumn "%time"
+    inheritedAlloc <- parseHeaderColumn "%alloc"
+    _ <- if verbose then parseVerbose else pure unit
+    pure unit
+    where
+    parseVerbose = do
+        _ <- parseHeaderColumn "ticks"
+        _ <- parseHeaderColumn "bytes"
+        pure unit
 
 -- TODO: Rename
-parseCostCenterStackLine :: CostCenterStackColumnWidths -> Parser CostCenterStackCostsWithDepth
-parseCostCenterStackLine
-    { name: cs
-    , mod: m
-    , src: src
-    , number: num
-    , entries: ent
-    , individual: { time : individualTime , alloc: individualAlloc }
-    , inherited : { time : inheritedTime , alloc : inheritedAlloc }
-    , ticks: ticks
-    , bytes: bytes }
-    = do
-        { name: name, depth: depth } <- takeN cs justDepthAndName
-        mod <- takeN m justString
-        s <- takeN src justString
-        n <- takeN num justInt
-        e <- takeN ent justInt
-        indT <- takeN individualTime justNum
-        indA <- takeN individualAlloc justNum
-        inhT <- takeN inheritedTime justNum
-        { alloc: inhA, ticks: t, bytes: b } <- parseEnd inheritedAlloc ticks bytes
-        pure $
-            { stack: 
-                { name: name
-                , mod: mod
-                , src: s
-                , number: n
-                , entries: e
-                , individual: { time : indT, alloc: indA }
-                , inherited: { time : inhT, alloc: inhA }
-                , ticks: t
-                , bytes: b
-                }
-            , depth: depth
+parseCostCenterStackLine :: CostCenterHeader -> Parser CostCenterStackCostsWithDepth
+parseCostCenterStackLine { costCenterVerbose: verbose } = do
+    { name: name, depth: depth } <- parseRowColumn "name" justDepthAndName
+    mod <- parseRowColumn "module" justString
+    src <- parseSrcColumn
+    num <- parseRowColumn "number" justInt
+    entries <- parseRowColumn "entries" justInt
+    indT <- parseRowColumn "individual time" justNum
+    indA <- parseRowColumn "individual alloc" justNum
+    inhT <- parseRowColumn "inherited time" justNum
+    inhA <- parseRowColumn "inherited alloc" justNum
+    { ticks: ticks, bytes: bytes } <- parseEnd verbose
+    pure $
+        { stack: 
+            { name: name
+            , mod: mod
+            , src: src
+            , number: num
+            , entries: entries
+            , individual: { time : indT, alloc: indA }
+            , inherited: { time : inhT, alloc: inhA }
+            , ticks: ticks
+            , bytes: bytes
             }
-        where
-        justDepthAndName :: String -> Maybe ({ name :: String,  depth :: Int })
-        justDepthAndName s =
-            let depth = countPrefix (\c -> c == (codePointFromChar ' ')) s
-            in pure { name: S.trim s, depth: depth }
+        , depth: depth
+        }
+    where
+    justDepthAndName :: String -> Maybe ({ name :: String,  depth :: Int })
+    justDepthAndName s =
+        let depth = countPrefix (\c -> c == (codePointFromChar ' ')) s
+        in pure { name: S.trim s, depth: depth }
 
 -- Date/time helpers
 
@@ -372,57 +328,79 @@ eol :: Parser String
 eol = (string "\n" <|> string "\r" <|> string "\r\n")
 
 separator :: Parser String
-separator = (string " " <|> string "\t")
+separator = do
+    c <- (satisfy \ c -> c == ' ' || c == '\t')
+    pure $ singleton c
 
 blankSpace :: Parser String
 blankSpace = do
     s <- many separator
     pure (foldr (<>) "" s)
 
+blankSpace1 :: Parser String
+blankSpace1 = do
+    s <- many1 separator
+    pure (foldr (<>) "" s)
+
 nonSpace :: Parser String
 nonSpace = do
-    c <- (satisfy \ c -> c /= '\n' && c /= '\r' && c /= ' ' && c /= '\t')
+    c <- (satisfy \ c -> c /= ' ' && c /= '\t' && c /= '\n' && c /= '\r')
     pure $ singleton c
 
--- TODO: Better name? make less specialized?
-takeN :: forall a. Int -> (String -> Maybe a) -> Parser a
-takeN n p = go n ""
-    where
-    go :: Int -> String -> Parser a
-    go 0 acc = case (p  acc) of
-        Just v -> pure v
-        Nothing -> fail "Error"
-    go n' acc = do
-      s <- option "" (nonSpace <|> separator)
-      go (n' - 1) (acc <> s)
+nonEolChar :: Parser Char
+nonEolChar = satisfy \c -> c /= '\n' && c /= '\r'
 
-parseHeaderOptionals :: Parser { ticks :: Int, bytes :: Int }
+word :: Parser String
+word = do
+    s <- many1 nonSpace
+    pure (foldr (<>) "" s)
+
+parseHeaderOptionals :: Parser Boolean
 parseHeaderOptionals = do
-    t <- option 0 (countWidth false $ string "ticks")
-    b <- option 0 (countWidth false $ string "bytes")
-    pure { ticks: t, bytes: b }
+    t <- option false (parseHeaderColumn "ticks")
+    b <- option false (parseHeaderColumn "bytes")
+    pure $ t && b
 
-parseEnd :: Int -> Int -> Int -> Parser ({ alloc :: Number, ticks :: Maybe Int, bytes :: Maybe Int })
-parseEnd alloc ticks bytes = (try (parseDetailed alloc ticks bytes)) <|> (parseRegular alloc)
+parseEnd :: Boolean -> Parser ({ ticks :: Maybe Int, bytes :: Maybe Int })
+parseEnd verbose = 
+    if verbose
+    then parseDetailed
+    else pure { ticks: Nothing, bytes: Nothing }
 
-parseDetailed :: Int -> Int -> Int -> Parser ({ alloc :: Number, ticks :: Maybe Int, bytes :: Maybe Int })
-parseDetailed alloc ticks bytes = do
-    a <- takeN alloc justNum
-    t <- takeN ticks justInt
-    b <- takeN bytes justInt
-    pure { alloc: a, ticks: Just t, bytes: Just b }
+parseDetailed ::  Parser ({ ticks :: Maybe Int, bytes :: Maybe Int })
+parseDetailed = do
+    t <- parseRowColumn "ticks" justInt
+    b <- parseRowColumn "bytes" justInt
+    pure { ticks: Just t, bytes: Just b }
 
-parseRegular :: Int -> Parser ({ alloc :: Number, ticks :: Maybe Int, bytes :: Maybe Int })
-parseRegular alloc = do
-    a <- takeN alloc justNum
-    pure { alloc: a, ticks: Nothing, bytes: Nothing }
-
-countWidth :: Boolean -> Parser String -> Parser Int
-countWidth takeRight p = do
+parseHeaderColumn :: String -> Parser Boolean
+parseHeaderColumn p = do
     s <- blankSpace
-    t <- p
-    e <- if takeRight then blankSpace else pure ""
-    pure $ S.length (s <> t <> e)
+    t <- string p
+    e <- blankSpace
+    pure true
+
+parseRowColumn :: forall a. String -> (String -> Maybe a) -> Parser a
+parseRowColumn err f = do
+    prespace <- blankSpace
+    val <- word 
+    space <- blankSpace
+    case (f (prespace <> val <> space)) of
+        Just v -> pure v
+        Nothing -> fail ("Parsing failed on `" <> err <> "` " <> val)
+
+parseSrcColumn :: Parser String
+parseSrcColumn = (bracketed <|> parseRowColumn "source" justString)
+    where
+    bracketed :: Parser String
+    bracketed = do
+        prespace <- blankSpace
+        src <- between (char '<') (char '>') (many bracketedChar)
+        space <- blankSpace
+        pure $ "<" <> (foldr (<>) "" src) <> ">"
+    bracketedChar = do
+        c <- satisfy \c -> c /= '\n' && c /= '\r' && c /= '>'
+        pure $ singleton c
 
 justString :: String -> Maybe String
 justString s = Just $ S.trim s
