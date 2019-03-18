@@ -9,11 +9,9 @@ import Effect.Class (class MonadEffect)
 import Foreign (unsafeFromForeign)
 import Halogen as H
 import Halogen.HTML as HH
-import Halogen.HTML.Core as HHC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.EventSource as HES
-import Halogen.VDom.Types as HVT
 import Profligate.Profile.ParseProfile (parseProfFile)
 import Profligate.State (DisplayMode(..), Query(..), State)
 import Profligate.FlameGraph (flameGraph)
@@ -26,8 +24,6 @@ import Web.File.FileList (item)
 import Web.File.FileReader (result, fileReader, readAsText, toEventTarget)
 import Web.HTML.Event.DataTransfer (DataTransfer, files)
 import Web.HTML.Event.DragEvent (dataTransfer, toEvent)
-
-
 
 component :: forall m. MonadEffect m => MonadAff m => H.Component HH.HTML Query Unit Void m
 component =

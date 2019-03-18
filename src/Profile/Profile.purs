@@ -3,7 +3,8 @@ module Profligate.Profile.Profile where
 import Prelude
 
 import Data.DateTime (DateTime)
-import Data.List (List)
+import Data.Foldable (foldr)
+import Data.List (List(..))
 import Data.Maybe (Maybe)
 
 newtype Tree a = Node { value :: a
@@ -11,6 +12,13 @@ newtype Tree a = Node { value :: a
                       }
 
 type Forest a = List (Tree a)
+
+depth :: forall a. Forest a -> Int
+depth Nil = 0
+depth xs = 1 + (foldr (\(Node { children: c}) acc -> max acc (depth c)) 0 xs)
+    where
+    max :: Int -> Int -> Int
+    max a b = if a > b then a else b
 
 derive instance eqTree :: (Eq a) => Eq (Tree a)
 
