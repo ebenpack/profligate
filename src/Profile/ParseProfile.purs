@@ -6,6 +6,7 @@ import Control.Alternative ((<|>))
 import Data.Array as Array
 import Data.Date.Component (Day, Month(..), Year)
 import Data.DateTime (DateTime(..), Time(..), Weekday(..), canonicalDate)
+import Data.Either (Either(..))
 import Data.Enum (toEnum)
 import Data.Foldable (foldr)
 import Data.Int (fromString, pow, toNumber)
@@ -17,7 +18,7 @@ import Data.String as S
 import Data.String.CodePoints (countPrefix, codePointFromChar)
 import Data.String.CodeUnits (fromCharArray, singleton)
 import Profligate.Profile.Profile (Tree(..), Forest, TotalTime, PerCostCenterCosts, CostCenterStackCosts, Profile)
-import Text.Parsing.StringParser (Parser, fail, try)
+import Text.Parsing.StringParser (Parser(..), fail, try)
 import Text.Parsing.StringParser.CodePoints (anyChar, anyDigit, char, string, skipSpaces, satisfy)
 import Text.Parsing.StringParser.Combinators (between, option, many1, manyTill, many)
 
@@ -26,6 +27,10 @@ type CostCenterHeader  =
     }
 
 type CostCenterStackCostsWithDepth = { depth :: Int, stack :: CostCenterStackCosts }
+
+-- This is a hack to clear the parse input, to prevent some egregious quadratic behavior
+clear :: Parser Unit
+clear = Parser \{ str, pos } -> Right { result: unit, suffix: { str: S.drop pos str, pos: 0 } }
 
 -- Prof file
 
@@ -147,7 +152,7 @@ parseCostCenterStack csh@{ costCenterVerbose: verbose } = do
     _ <- skipSpaces *> string "individual" *> skipSpaces *> string "inherited" *> eol
     _ <- (parseCostCenterStackHeader csh) <* eol
     _ <- blankLine
-    cs <- many (parseCostCenterStackLine csh <* eol)
+    cs <- many (parseCostCenterStackLine csh <* eol <* clear)
     pure $ reverseTree $ treeify $ reverse cs -- TODO: This is not optimal
     where
     treeify :: List CostCenterStackCostsWithDepth -> Forest CostCenterStackCosts
