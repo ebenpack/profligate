@@ -39,6 +39,7 @@ component =
         { profFile: Nothing
         , parseError : Nothing
         , displayMode : FlameGraph
+        , flameLegend : ""
         }
 
     itemStyle :: forall r i. String -> HP.IProp ( style :: String | r ) i
@@ -63,7 +64,7 @@ component =
                 -- , HH.div_ [ HH.text "Profile: ", profileDebug ]
                 -- , HH.div_ [ HH.text "Error: ", errorDebug ]
                 , case state.profFile of
-                    Just p -> flameGraph p
+                    Just p -> flameGraph p state
                     Nothing -> HH.div_ [ HH.text "" ]
                 ]
             ]
@@ -80,6 +81,9 @@ component =
     eval :: Query ~> H.ComponentDSL State Query Void m
     eval = case _ of
         NoOp next -> do
+            pure next
+        ChangeFlameLegend str next -> do
+            _ <- H.modify $ \state -> state { flameLegend = str }
             pure next
         ChangeDisplayMode mode next -> do
             _ <- H.modify $ \state -> state { displayMode = mode }
