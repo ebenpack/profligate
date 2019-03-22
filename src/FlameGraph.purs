@@ -2,13 +2,14 @@ module Profligate.FlameGraph where
 
 import Prelude
 
-import Control.Monad.Gen (chooseInt, oneOf)
 import Data.Array as Arr
+import Data.Char (toCharCode)
 import Data.Foldable (foldr)
 import Data.Int (toNumber, round)
 import Data.List (List(..), (:), concatMap, reverse)
 import Data.Maybe (Maybe(..))
 import Data.String as S
+import Data.String.CodeUnits (toCharArray)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HHC
@@ -21,25 +22,27 @@ import Profligate.State (Query(..), State)
 type AnnotatedCostTree =
     { offset :: Number
     , tree :: Tree CostCenterStackCosts
-    , color :: Int
     }
+
+totalWidth :: Number
+totalWidth = 1200.0
 
 flameGraph :: Profile -> State -> H.ComponentHTML Query
 flameGraph prof state =
     HH.div
         [ HP.attr (H.AttrName "style") "width:600px; height:400px;" ]
         [ svg
-            [ HP.attr (H.AttrName "viewBox") ("0 0 1000 " <> (show totalHeight))
-            , HP.attr (H.AttrName "width") "1000"
+            [ HP.attr (H.AttrName "viewBox") ("0 0 " <> (show totalWidth) <> " " <> (show totalHeight))
+            , HP.attr (H.AttrName "width") (show totalWidth)
             , HP.attr (H.AttrName "height") $ show totalHeight
             , HP.attr (H.AttrName "style") "width: 100%; height: auto;"
             ]
             ((doStuff prof) <>
                 [ text 
                     [ HP.attr (H.AttrName "x") "10"
-                    , HP.attr (H.AttrName "y") "30"
+                    , HP.attr (H.AttrName "y") "25"
                     , HP.attr (H.AttrName "fill") "black"
-                    , HP.attr (H.AttrName "font-size") "30"
+                    , HP.attr (H.AttrName "font-size") "25"
                     , HP.attr (H.AttrName "alignment-baseline") "baseline"
                     ] 
                     [ HH.text (state.flameLegend) ]
@@ -51,19 +54,16 @@ flameGraph prof state =
         dep = depth prof.costCenterStack
 
         rowHeight :: Number
-        rowHeight = 30.0
-
-        totalWidth :: Number
-        totalWidth = 1000.0
+        rowHeight = 25.0
 
         totalHeight :: Number
         totalHeight = (toNumber dep) * rowHeight
 
         doStuff :: Profile -> Array (H.ComponentHTML Query)
-        doStuff p = Arr.fromFoldable $ helper 0 0 0.0 p.costCenterStack
+        doStuff p = Arr.fromFoldable $ helper 0 0.0 p.costCenterStack
 
-        helper :: Int -> Int -> Number -> Forest CostCenterStackCosts -> List (H.ComponentHTML Query)
-        helper col d baseOffset cs = (wrappedRow : descendents)
+        helper :: Int -> Number -> Forest CostCenterStackCosts -> List (H.ComponentHTML Query)
+        helper d baseOffset cs = (wrappedRow : descendents)
             where
                 offsetTop :: Number
                 offsetTop = totalHeight - ((toNumber d) * rowHeight) - rowHeight
@@ -78,16 +78,16 @@ flameGraph prof state =
                 row = Arr.foldr rowHelper [] $ Arr.fromFoldable annotatedTree
 
                 rowHelper :: AnnotatedCostTree -> Array (H.ComponentHTML Query) -> Array (H.ComponentHTML Query)
-                rowHelper { offset: offsetLeft, tree: (Node { value: c }), color } acc = Arr.cons (drawCostCenter color totalWidth rowHeight offsetLeft offsetTop c) acc
+                rowHelper { offset: offsetLeft, tree: (Node { value: c }) } acc = Arr.cons (drawCostCenter rowHeight offsetLeft offsetTop c) acc
     
                 annotateTree :: Tree CostCenterStackCosts -> List AnnotatedCostTree -> List AnnotatedCostTree
                 annotateTree c@(Node { value }) Nil = 
                     if value.inherited.time > 0.0 || value.inherited.alloc > 0.0
-                    then ({ offset: baseOffset, tree: c, color: col } : Nil)
+                    then ({ offset: baseOffset, tree: c } : Nil)
                     else Nil
-                annotateTree c@(Node { value }) (x@({ tree: Node { value: v }, offset: offset, color }) : xs) = 
+                annotateTree c@(Node { value }) (x@({ tree: Node { value: v }, offset: offset }) : xs) = 
                     if value.inherited.time > 0.0 || value.inherited.alloc > 0.0
-                    then ({ offset: offset + ((v.inherited.time / 100.0) * totalWidth), tree: c, color: nextColor color }) : x : xs
+                    then ({ offset: offset + ((v.inherited.time / 100.0) * totalWidth), tree: c }) : x : xs
                     else x : xs
 
                 -- TODO: Does rowHelper unreverse this?
@@ -98,42 +98,39 @@ flameGraph prof state =
                 descendents = concatMap descendentsHelper annotatedTree
                     
                 descendentsHelper :: AnnotatedCostTree -> List (H.ComponentHTML Query)
-                descendentsHelper { offset: offset, tree: (Node { children: t }), color } = helper (nextColor color) (d + 1) offset t
+                descendentsHelper { offset: offset, tree: (Node { children: t }) } = helper (d + 1) offset t
 
                 wrappedRow :: H.ComponentHTML Query
                 wrappedRow = g [] row
 
 colors :: Array String
 colors =
-    [ "#DCF7F3"
+    [ "#B5D8EB"
+    , "#DCF7F3"
     , "#E3AAD6"
-    , "#B5D8EB"
-    , "#FFBDD8"
-    , "#FFFCDD"
-    , "#805841"
-    , "#FFC8BA"
-    , "#D0ECEA"
-    , "#93DFB8"
-    , "#FFEFD3"
     , "#F5A2A2"
-    , "#FC9D9A"
-    , "#9FD6D2"
-    , "#FFD8D8"
-    , "#F9CDAD"
-    , "#E8DAFB"
-    , "#FFFEE4"
-    , "#83AF9B"
     , "#F8DAFB"
-    , "#DAFBF8"
-    , "#C8C8A9"
-    , "#DADDFB"
+    , "#F9CDAD"
+    , "#FFBDD8"
+    , "#FFC8BA"
+    , "#FFD8D8"
+    , "#FFFCDD"
     ]
 
-nextColor :: Int -> Int
-nextColor color = ((color + 1) `mod` (Arr.length colors))
 
-drawCostCenter :: Int -> Number -> Number -> Number -> Number -> CostCenterStackCosts ->  H.ComponentHTML Query
-drawCostCenter color totalWidth rowHeight offsetLeft offsetTop cs = 
+-- Get a pretty dumb hash of the module and use that to select a color
+-- Collisions are likely
+getColor :: CostCenterStackCosts -> String
+getColor cs = 
+    let tot = Arr.foldr (\c acc -> acc + (toCharCode c)) 0 (toCharArray cs.mod)
+        idx = tot `mod` (Arr.length colors)
+    in case (Arr.(!!) colors idx) of 
+        Just col' -> col'
+        _ -> "red"
+
+
+drawCostCenter :: Number -> Number -> Number -> CostCenterStackCosts ->  H.ComponentHTML Query
+drawCostCenter rowHeight offsetLeft offsetTop cs = 
     let x = show offsetLeft
         y = show offsetTop
         width = show ((cs.inherited.time / 100.0) * totalWidth)
@@ -142,9 +139,7 @@ drawCostCenter color totalWidth rowHeight offsetLeft offsetTop cs =
         fontSize = show eigthHeight
         maxStringLen = (toNumber $ S.length cs.name) * eigthHeight
         name = S.take (round maxStringLen) cs.name
-        col = case (Arr.(!!) colors color) of
-            Just col' -> col'
-            _ -> "red"
+        col = getColor cs
     in g
         [ ]
         [ rect
@@ -157,6 +152,7 @@ drawCostCenter color totalWidth rowHeight offsetLeft offsetTop cs =
             , HP.attr (H.AttrName "fill") col
             , HP.attr (H.AttrName "stroke") "black"
             , HP.attr (H.AttrName "stroke-width") "2"
+            -- TODO: For performance, onClick would be better
             , HE.onMouseEnter (\_ -> Just $ H.action (ChangeFlameLegend name))
             , HE.onMouseLeave (\_ -> Just $ H.action (ChangeFlameLegend ""))
             ]
