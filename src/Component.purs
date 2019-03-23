@@ -14,7 +14,7 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.EventSource as HES
 import Profligate.Profile.ParseProfile (parseProfFile)
 import Profligate.State (DisplayMode(..), Query(..), State)
-import Profligate.FlameGraph (flameGraph)
+import Profligate.FlameGraph as FG
 import Text.Parsing.StringParser (runParser, ParseError(..))
 import Web.Event.Event (EventType(..), preventDefault, stopPropagation)
 import Web.Event.EventTarget (addEventListener, eventListener)
@@ -25,9 +25,13 @@ import Web.File.FileReader (result, fileReader, readAsText, toEventTarget)
 import Web.HTML.Event.DataTransfer (DataTransfer, files)
 import Web.HTML.Event.DragEvent (dataTransfer, toEvent)
 
+data Slot = FlameGraphSlot
+derive instance eqButtonSlot :: Eq Slot
+derive instance ordButtonSlot :: Ord Slot
+
 component :: forall m. MonadEffect m => MonadAff m => H.Component HH.HTML Query Unit Void m
 component =
-    H.component
+    H.parentComponent
         { initialState: const initialState
         , render
         , eval
@@ -39,13 +43,12 @@ component =
         { profFile: Nothing
         , parseError : Nothing
         , displayMode : FlameGraph
-        , flameLegend : ""
         }
 
     itemStyle :: forall r i. String -> HP.IProp ( style :: String | r ) i
     itemStyle = HP.attr (H.AttrName "style")
 
-    dropzone :: H.ComponentHTML Query
+    dropzone :: H.ParentHTML Query FG.Query Slot m
     dropzone =
         HH.div
             [ HE.onDragOver (\e -> Just $ H.action (DragOver e))
@@ -54,36 +57,36 @@ component =
             ]
             [ HH.text "Plop yer prof file here" ]
 
-    render :: State -> H.ComponentHTML Query
+    render :: State -> H.ParentHTML Query FG.Query Slot m
     render state =
         HH.div_
             [ HH.h1_ [ HH.text "Profligate" ]
             , dropzone
             , HH.div_
-                [ HH.h2_ [ HH.text "DEBUG" ]
+                ([ HH.h2_ [ HH.text "DEBUG" ]
                 -- , HH.div_ [ HH.text "Profile: ", profileDebug ]
-                -- , HH.div_ [ HH.text "Error: ", errorDebug ]
-                , case state.profFile of
-                    Just p -> flameGraph p state
-                    Nothing -> HH.div_ [ HH.text "" ]
+                , HH.div_ [ HH.text "Error: ", errorDebug ]
                 ]
+                <> flameGraph)
             ]
         where
-        profileDebug =
+        flameGraph =
             case state.profFile of
-                Nothing -> HH.text "NOTHING"
-                Just p -> HH.text $ show p
+                Just p ->
+                    [ HH.slot FlameGraphSlot (FG.flameGraph p) unit absurd ]
+                Nothing -> []
+        -- profileDebug =
+        --     case state.profFile of
+        --         Nothing -> HH.text "NOTHING"
+        --         Just p -> HH.text $ show p
         errorDebug =
             case state.parseError of
                 Nothing -> HH.text "OK"
                 Just err -> HH.text err
 
-    eval :: Query ~> H.ComponentDSL State Query Void m
+    eval :: Query ~> H.ParentDSL State Query FG.Query Slot Void m
     eval = case _ of
         NoOp next -> do
-            pure next
-        ChangeFlameLegend str next -> do
-            _ <- H.modify $ \state -> state { flameLegend = str }
             pure next
         ChangeDisplayMode mode next -> do
             _ <- H.modify $ \state -> state { displayMode = mode }
@@ -105,6 +108,7 @@ component =
             let evt = toEvent e
             H.liftEffect $ preventDefault evt
             H.liftEffect $ stopPropagation evt
+            _ <- H.modify (\state -> state { parseError = Nothing, profFile = Nothing })
             let trans = dataTransfer e
                 blob = getFile trans
             case blob of
@@ -124,7 +128,6 @@ component =
         subthingy trgt fr =
             H.subscribe $ H.eventSource (bindLoad trgt) handleLoad
             where
-            -- handleLoad
             handleLoad e = pure $ FileLoaded fr $ HES.Done
 
 getFile :: DataTransfer -> Maybe Blob

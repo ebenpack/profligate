@@ -29,6 +29,8 @@ type CostCenterHeader  =
 type CostCenterStackCostsWithDepth = { depth :: Int, stack :: CostCenterStackCosts }
 
 -- This is a hack to clear the parse input, to prevent some egregious quadratic behavior
+-- This is ultimately due to `Data.String.CodePoints.indexOf'`. The `CodeUnits` version doesn't have the
+-- same performance characteristics, so another alternative would be to use the `CodeUnits` parsers.
 clear :: Parser Unit
 clear = Parser \{ str, pos } -> Right { result: unit, suffix: { str: S.drop pos str, pos: 0 } }
 
