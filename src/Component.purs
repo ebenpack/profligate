@@ -3,7 +3,7 @@ module Profligate.Component where
 import Prelude
 
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromJust, isJust)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Foreign (unsafeFromForeign)
@@ -12,6 +12,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.EventSource as HES
+import Partial.Unsafe (unsafePartial)
 import Profligate.FlameGraph as FG
 import Profligate.Profile.ParseProfile (parseProfFile)
 import Profligate.Profile.Profile (filter)
@@ -70,16 +71,48 @@ component =
         HH.div
             [ HP.attr (H.AttrName "class") "container" ]
             [ header
-            , if state.loading
-              then spinner
-              else HH.main_ flameGraph
+            , HH.main_ $ showMain state
             ]
-        where
-        flameGraph =
-            case state.profFile of
-                Just p ->
-                    [ HH.slot FlameGraphSlot (FG.flameGraph p) unit absurd ]
-                Nothing -> []
+
+    showMain :: State -> Array (H.ParentHTML Query FG.Query Slot m)
+    showMain { loading } | loading = [ spinner ]
+    showMain { parseError } | isJust parseError = showError
+    showMain { profFile } | isJust profFile = [ HH.slot FlameGraphSlot (FG.flameGraph (unsafePartial $ fromJust profFile)) unit absurd ]
+    showMain _ =
+        [ HH.div
+            [ HP.attr (H.AttrName "class") "text" ]
+            [ HH.h2_ [ HH.text "Introduction" ]
+            , HH.p_
+                [ HH.text "Profligate is a tool to help you visualize your GHC profile files like a pro... file." ]
+            , HH.p_
+                [ HH.text $ "Just drop your .prof file (generated with the GHC RTS -p flag) up above, and " <>
+                    "profligate will produce a flame graph-style visualization of your program's cost-centre stacks to help you " <>
+                    "analyze your program's performance."
+                ]
+            , HH.p_
+                [ HH.text "If you just want to try it out, "
+                , HH.a
+                    [ HP.attr (H.AttrName "href") "hascheme.prof"]
+                    [ HH.text "there's a sample .prof file you can use here." ]
+                ]
+            ]
+        ]
+
+    showError :: Array (H.ParentHTML Query FG.Query Slot m)
+    showError =
+        [ HH.div
+            [ HP.attr (H.AttrName "class") "text" ]
+            [ HH.h2_ [ HH.text "Whoopsie daisy..." ]
+            , HH.p_ [ HH.text "A problem occurred while processing your file." ]
+            , HH.p_
+                [ HH.text "If you believe this .prof file to be valid and well-formed, please "
+                , HH.a
+                    [ HP.attr (H.AttrName "href") "https://github.com/ebenpack/profligate/issues"]
+                    [ HH.text "submit a bug report here" ]
+                , HH.text ", attaching this file."
+                ]
+            ]
+        ]
 
     eval :: Query ~> H.ParentDSL State Query FG.Query Slot Void m
     eval = case _ of
