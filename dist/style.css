@@ -5,6 +5,14 @@ body {
     box-sizing: border-box;
 }
 
+p {
+    line-height: 1.5em;
+}
+
+a:link {
+    color: #0000b7;
+}
+
 .container {
     box-shadow: 1px 1px 5px 0 rgba(0,0,0,.22);
     display: flex;
@@ -38,11 +46,20 @@ header .dropzone {
     border-radius: 3px;
 }
 
+header .dropzone:hover {
+    background-color: #f5b55d;
+}
+
 main {
     padding-top:20px;
     flex: 1 1 auto;
     align-self: auto;
     background-color: #dcdcdc;
+    display: flex;
+}
+
+main .text {
+    margin: 0 40px;
 }
 
 .stack  {
