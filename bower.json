@@ -14,7 +14,8 @@
     "purescript-effect": "^2.0.0",
     "purescript-string-parsers": "^5.0.0",
     "purescript-datetime": "^4.1.1",
-    "purescript-foreign": "^5.0.0"
+    "purescript-foreign": "^5.0.0",
+    "purescript-numbers": "^6.0.0"
   },
   "devDependencies": {
     "purescript-psci-support": "^4.0.0",

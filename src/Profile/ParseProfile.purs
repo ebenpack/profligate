@@ -1,6 +1,6 @@
 module Profligate.Profile.ParseProfile where
 
-import Prelude
+import Prelude hiding (between)
 
 import Control.Alternative ((<|>))
 import Data.Array as Array

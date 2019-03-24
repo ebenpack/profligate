@@ -4,7 +4,6 @@ import Prelude
 
 import Data.DateTime (DateTime)
 import Data.Foldable (foldr)
-import Data.Int.Bits (xor)
 import Data.List (List(..), (:))
 import Data.Maybe (Maybe)
 

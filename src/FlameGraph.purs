@@ -1,6 +1,6 @@
 module Profligate.FlameGraph where
 
-import Prelude
+import Prelude hiding (div)
 
 import Data.Array as Arr
 import Data.Char (toCharCode)
