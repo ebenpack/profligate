@@ -15,6 +15,7 @@ import Halogen.Query.EventSource as HES
 import Profligate.FlameGraph as FG
 import Profligate.Profile.ParseProfile (parseProfFile)
 import Profligate.Profile.Profile (filter)
+import Profligate.Spinner (spinner)
 import Profligate.State (DisplayMode(..), Query(..), State)
 import Text.Parsing.StringParser (runParser, ParseError(..))
 import Web.Event.Event (EventType(..), preventDefault, stopPropagation)
@@ -42,8 +43,9 @@ component =
     initialState :: State
     initialState =
         { profFile: Nothing
-        , parseError : Nothing
-        , displayMode : FlameGraph
+        , parseError: Nothing
+        , displayMode: FlameGraph
+        , loading: false
         }
 
     itemStyle :: forall r i. String -> HP.IProp ( style :: String | r ) i
@@ -68,7 +70,9 @@ component =
         HH.div
             [ HP.attr (H.AttrName "class") "container" ]
             [ header
-            , HH.main_ flameGraph
+            , if state.loading
+              then spinner
+              else HH.main_ flameGraph
             ]
         where
         flameGraph =
@@ -87,6 +91,7 @@ component =
         FileLoaded fr next -> do
             t <- H.liftEffect $ result fr
             let prof = runParser parseProfFile $ unsafeFromForeign t
+            _ <- H.modify (\state -> state { loading = false })
             _ <- H.modify (\state ->
                 case prof of
                     Left (ParseError err) ->
@@ -104,13 +109,16 @@ component =
             let evt = toEvent e
             H.liftEffect $ preventDefault evt
             H.liftEffect $ stopPropagation evt
-            _ <- H.modify (\state -> state { parseError = Nothing, profFile = Nothing })
+            _ <- H.modify (\state ->
+                state { parseError = Nothing, profFile = Nothing })
             let trans = dataTransfer e
                 blob = getFile trans
             case blob of
                 Nothing -> pure unit
                 Just blob' -> do
                     fr <- H.liftEffect $ fileReader
+                    _ <- H.modify (\state ->
+                        state { loading = true })
                     let et = toEventTarget fr
                     subthingy et fr
                     t <- H.liftEffect $ readAsText blob' fr

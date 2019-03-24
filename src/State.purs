@@ -19,4 +19,5 @@ type State =
     { profFile :: Maybe Profile
     , parseError :: Maybe String
     , displayMode :: DisplayMode
+    , loading :: Boolean
     }
