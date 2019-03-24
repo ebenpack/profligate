@@ -75,9 +75,10 @@ component =
             ]
 
     showMain :: State -> Array (H.ParentHTML Query FG.Query Slot m)
-    showMain { loading } | loading = [ spinner ]
-    showMain { parseError } | isJust parseError = showError
-    showMain { profFile } | isJust profFile = [ HH.slot FlameGraphSlot (FG.flameGraph (unsafePartial $ fromJust profFile)) unit absurd ]
+    showMain { loading, parseError, profFile } 
+        | loading = [ spinner ]
+        | isJust parseError = showError
+        | isJust profFile = [ HH.slot FlameGraphSlot (FG.flameGraph (unsafePartial $ fromJust profFile)) unit absurd ]
     showMain _ =
         [ HH.div
             [ HP.attr (H.AttrName "class") "text" ]
