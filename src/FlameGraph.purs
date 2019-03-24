@@ -7,17 +7,16 @@ import Data.Char (toCharCode)
 import Data.Foldable (foldr)
 import Data.Int (toNumber, round)
 import Data.List (List(..), (:), concatMap, reverse)
-import Data.Maybe (Maybe(..))
+import Math (floor)
+import Data.Maybe (Maybe(..), maybe)
 import Data.String as S
 import Data.String.CodeUnits (toCharArray)
-import Data.Tuple (Tuple(..))
-import Effect.Aff (Aff)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
+import Halogen.HTML (div)
 import Halogen.HTML as HH
 import Halogen.HTML.Core as HHC
-import Halogen.HTML.Elements.Keyed as HK
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Types as HVT
@@ -69,14 +68,10 @@ flameGraph prof = H.component
 
         children = doStuff prof
 
-        showFlameLegend flameLegend =
+        showFlameLegend cs =
             HH.div_ [ HH.text t ]
             where
-                t = case flameLegend of
-                    Nothing -> "Function:"
-                    Just flameLegend' ->
-                        "Function: " <> flameLegend'.name <>
-                            " (" <> show flameLegend'.number <> " samples, " <> show flameLegend'.inherited.time <> "%)"
+            t = maybe "Function:" displayStackInfo cs
 
         initialState :: State
         initialState =
@@ -157,6 +152,11 @@ colors =
     , "#FFFCDD"
     ]
 
+displayStackInfo :: CostCenterStackCosts -> String
+displayStackInfo cs =
+    "Function: " <> cs.name <>
+        " (" <> show cs.number <> " samples, " <> show cs.inherited.time <> "%)"
+
 
 -- Get a pretty dumb hash of the module and use that to select a color
 -- Collisions are likely
@@ -173,7 +173,7 @@ drawCostCenter :: Number -> Number -> Number -> CostCenterStackCosts ->  H.Compo
 drawCostCenter rowHeight offsetLeft offsetTop cs =
     let x = show offsetLeft
         y = show offsetTop
-        width = show ((cs.inherited.time / 100.0) * totalWidth)
+        width = show $ floor ((cs.inherited.time / 100.0) * totalWidth)
         height = show rowHeight
         eigthHeight = (rowHeight * 0.8)
         fontSize = show eigthHeight
@@ -181,7 +181,7 @@ drawCostCenter rowHeight offsetLeft offsetTop cs =
         name = S.take (round maxStringLen) cs.name
         col = getColor cs
     in g
-        [ ]
+        [ HE.onClick (\_ -> Just $ H.action (ChangeFlameLegend $ Just cs)) ]
         [ rect
             [ HP.attr (H.AttrName "x") x
             , HP.attr (H.AttrName "y") y
@@ -192,9 +192,21 @@ drawCostCenter rowHeight offsetLeft offsetTop cs =
             , HP.attr (H.AttrName "fill") col
             , HP.attr (H.AttrName "stroke") "black"
             , HP.attr (H.AttrName "stroke-width") "2"
-            , HE.onClick (\_ -> Just $ H.action (ChangeFlameLegend $ Just cs))
             ]
-            []
+            [ title
+                []
+                [ text [] [ HH.text $ displayStackInfo cs ]]
+            ]
+        , foreignObject
+            [ HP.attr (H.AttrName "x") x
+            , HP.attr (H.AttrName "y") y
+            , HP.attr (H.AttrName "width") width
+            , HP.attr (H.AttrName "height") height
+            ]
+            [ div
+                [ HP.attr (H.AttrName "style") ("pointer-events:none;vertical-align:middle;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;padding:5px;font-size:" <> show (rowHeight * 0.7) <> "px;height" <> height<> ";") ]
+                [ HH.text $ cs.name ]
+            ]
         ]
 
 svg :: forall r p i. Array (HP.IProp r i) -> Array (HHC.HTML p i) -> HHC.HTML p i
@@ -228,3 +240,7 @@ use props children =
 g :: forall r p i. Array (HP.IProp r i) -> Array (HHC.HTML p i) -> HHC.HTML p i
 g props children =
     HH.elementNS (HVT.Namespace "http://www.w3.org/2000/svg") (HVT.ElemName "g") props children
+
+foreignObject :: forall r p i. Array (HP.IProp r i) -> Array (HHC.HTML p i) -> HHC.HTML p i
+foreignObject props children =
+    HH.elementNS (HVT.Namespace "http://www.w3.org/2000/svg") (HVT.ElemName "foreignObject") props children
