@@ -7,7 +7,6 @@ import Data.Char (toCharCode)
 import Data.Foldable (foldr)
 import Data.Int (toNumber, round)
 import Data.List (List(..), (:), concatMap, reverse)
-import Math (floor)
 import Data.Maybe (Maybe(..), maybe)
 import Data.String as S
 import Data.String.CodeUnits (toCharArray)
@@ -20,8 +19,8 @@ import Halogen.HTML.Core as HHC
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.VDom.Types as HVT
+import Math (floor)
 import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Tree(..), Forest, depth)
-
 
 type AnnotatedCostTree =
     { offset :: Number
@@ -30,6 +29,9 @@ type AnnotatedCostTree =
 
 totalWidth :: Number
 totalWidth = 1200.0
+
+strokeWidth :: Int
+strokeWidth = 2
 
 type State =
     { currentId :: Int
@@ -54,24 +56,30 @@ flameGraph prof = H.component
         render :: State -> H.ComponentHTML Query
         render state =
             HH.div
-                [ HP.attr (H.AttrName "style") "width:600px; height:400px;" ]
-                [ (showFlameLegend state.flameLegend)
-                , svg
+                [ HP.attr (H.AttrName "style") "width:100%;" ]
+                [ svg
                     [ HP.attr (H.AttrName "viewBox") ("0 0 " <> (show totalWidth) <> " " <> (show totalHeight))
                     , HP.attr (H.AttrName "width") (show totalWidth)
                     , HP.attr (H.AttrName "height") $ show totalHeight
                     , HP.attr (H.AttrName "style") "width: 100%; height: auto;"
                     ]
-                    children
+                    [ (showFlameLegend state.flameLegend)
+                    , children
+                    ]
                 ]
 
 
         children = doStuff prof
 
         showFlameLegend cs =
-            HH.div_ [ HH.text t ]
+            text
+                [ HP.attr (H.AttrName "y") (show (rowHeight * 2.0))
+                , HP.attr (H.AttrName "x") (show (totalWidth * 0.02))
+                , HP.attr (H.AttrName "font-size") (show rowHeight)
+                ]
+                [ HH.text t ]
             where
-            t = maybe "Function:" displayStackInfo cs
+            t = maybe "" displayStackInfo cs
 
         initialState :: State
         initialState =
@@ -94,8 +102,8 @@ flameGraph prof = H.component
         totalHeight :: Number
         totalHeight = (toNumber dep) * rowHeight
 
-        doStuff :: Profile -> Array (H.ComponentHTML Query)
-        doStuff p = Arr.fromFoldable $ helper 0 0.0 p.costCenterStack
+        doStuff :: Profile -> H.ComponentHTML Query
+        doStuff p = g [] (Arr.fromFoldable $ helper 0 0.0 p.costCenterStack)
 
         helper :: Int -> Number -> Forest CostCenterStackCosts -> List (H.ComponentHTML Query)
         helper d baseOffset cs = (wrappedRow : descendents)
@@ -155,7 +163,7 @@ colors =
 displayStackInfo :: CostCenterStackCosts -> String
 displayStackInfo cs =
     "Function: " <> cs.name <>
-        " (" <> show cs.number <> " samples, " <> show cs.inherited.time <> "%)"
+        " (" <> show cs.entries <> " entries, " <> show cs.inherited.time <> "%)"
 
 
 -- Get a pretty dumb hash of the module and use that to select a color
@@ -181,17 +189,16 @@ drawCostCenter rowHeight offsetLeft offsetTop cs =
         name = S.take (round maxStringLen) cs.name
         col = getColor cs
     in g
-        [ HE.onClick (\_ -> Just $ H.action (ChangeFlameLegend $ Just cs)) ]
+        [ HE.onMouseEnter (\_ -> Just $ H.action (ChangeFlameLegend $ Just cs))
+        , HE.onMouseLeave (\_ -> Just $ H.action (ChangeFlameLegend Nothing))
+        , HP.attr (H.AttrName "class") "stack"]
         [ rect
             [ HP.attr (H.AttrName "x") x
             , HP.attr (H.AttrName "y") y
-            , HP.attr (H.AttrName "rx") "2"
-            , HP.attr (H.AttrName "ry") "2"
             , HP.attr (H.AttrName "width") width
             , HP.attr (H.AttrName "height") height
             , HP.attr (H.AttrName "fill") col
-            , HP.attr (H.AttrName "stroke") "black"
-            , HP.attr (H.AttrName "stroke-width") "2"
+            , HP.attr (H.AttrName "stroke-width") (show strokeWidth)
             ]
             [ title
                 []
@@ -202,9 +209,12 @@ drawCostCenter rowHeight offsetLeft offsetTop cs =
             , HP.attr (H.AttrName "y") y
             , HP.attr (H.AttrName "width") width
             , HP.attr (H.AttrName "height") height
+            , HP.attr (H.AttrName "pointer-events") "none"
             ]
             [ div
-                [ HP.attr (H.AttrName "style") ("pointer-events:none;vertical-align:middle;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;padding:5px;font-size:" <> show (rowHeight * 0.7) <> "px;height" <> height<> ";") ]
+                [ HP.attr (H.AttrName "style") ("font-size:" <> show (rowHeight * 0.7) <> "px;height" <> height<> ";")
+                , HP.attr (H.AttrName "pointer-events") "none"
+                ]
                 [ HH.text $ cs.name ]
             ]
         ]

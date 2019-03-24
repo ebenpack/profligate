@@ -4,7 +4,8 @@ import Prelude
 
 import Data.DateTime (DateTime)
 import Data.Foldable (foldr)
-import Data.List (List(..))
+import Data.Int.Bits (xor)
+import Data.List (List(..), (:))
 import Data.Maybe (Maybe)
 
 newtype Tree a = Node { value :: a
@@ -13,6 +14,11 @@ newtype Tree a = Node { value :: a
 
 type Forest a = List (Tree a)
 
+derive instance eqTree :: (Eq a) => Eq (Tree a)
+
+instance showTree :: (Show a) => Show (Tree a) where
+  show (Node { value: a, children: t }) = "Node " <> show a <> show t
+
 depth :: forall a. Forest a -> Int
 depth Nil = 0
 depth xs = 1 + (foldr (\(Node { children: c}) acc -> max acc (depth c)) 0 xs)
@@ -20,10 +26,12 @@ depth xs = 1 + (foldr (\(Node { children: c}) acc -> max acc (depth c)) 0 xs)
     max :: Int -> Int -> Int
     max a b = if a > b then a else b
 
-derive instance eqTree :: (Eq a) => Eq (Tree a)
-
-instance showTree :: (Show a) => Show (Tree a) where
-  show (Node { value: a, children: t }) = "Node " <> show a <> show t
+filter :: forall a. (a -> Boolean) -> Forest a -> Forest a
+filter _ Nil = Nil
+filter f (n@Node { value, children }:xs) =
+    if not $ f value
+    then filter f xs
+    else Node { value, children: filter f children } : filter f xs
 
 type TotalTime =
     { time :: Number
