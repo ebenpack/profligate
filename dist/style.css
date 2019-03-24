@@ -1,26 +1,68 @@
 
+body {
+    margin: 5% 10%;
+    background-color: #efeeee;
+    box-sizing: border-box;
+}
 
-/* 
-    93DFB8
-    FFC8BA
-    E3AAD6
-    B5D8EB
-    FFBDD8
-    DCF7F3
-    FFFCDD
-    FFD8D8
-    F5A2A2
-    805841
-    FFEFD3
-    FFFEE4
-    D0ECEA
-    9FD6D2
-    FC9D9A
-    F9CDAD
-    C8C8A9
-    83AF9B
-    F8DAFB
-    E8DAFB
-    DADDFB
-    DAFBF8
-*/
+.container {
+    box-shadow: 1px 1px 5px 0 rgba(0,0,0,.22);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-around;
+    align-content: flex-start;
+    min-height: 80vh;
+}
+
+header {
+    padding: 2% 8%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f9f9f9;
+    box-shadow: 0px 1px 24px -9px grey; /* TODO: Fix? */
+    flex: 0 0 auto;
+    align-self: auto;
+}
+
+header h1 {
+    flex: 0 0 auto;
+    padding-right: 20px;
+}
+
+header .dropzone {
+    flex: 1 1 auto;
+    text-align: center;
+    border: 4px dashed gray;
+    border-radius: 3px;
+}
+
+main {
+    padding-top:20px;
+    flex: 1 1 auto;
+    align-self: auto;
+    background-color: #dcdcdc;
+}
+
+.stack  {
+    stroke: #efefef;
+}
+
+.stack:hover {
+    opacity: 0.8;
+}
+
+.stack rect {
+    rx: 2;
+    ry: 2;
+}
+
+.stack div {
+    pointer-events: none;
+    vertical-align: middle;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    padding: 5px;
+}
