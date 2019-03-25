@@ -125,14 +125,13 @@ component =
         FileLoaded fr next -> do
             t <- H.liftEffect $ result fr
             let prof = runParser parseProfFile $ unsafeFromForeign t
-            _ <- H.modify (\state -> state { loading = false })
             _ <- H.modify (\state ->
                 case prof of
                     Left (ParseError err) ->
                         state { parseError = Just err, profFile = Nothing }
                     Right profFile ->
                         let filteredCostCenterStack = filter (\v -> v.inherited.time > 0.0 || v.inherited.alloc > 0.0) profFile.costCenterStack
-                        in state { profFile = Just (profFile { costCenterStack = filteredCostCenterStack }), parseError = Nothing })
+                        in state { profFile = Just (profFile { costCenterStack = filteredCostCenterStack }), parseError = Nothing, loading = false })
             pure next
         DragOver e next -> do
             let evt = (toEvent e)
@@ -144,15 +143,16 @@ component =
             H.liftEffect $ preventDefault evt
             H.liftEffect $ stopPropagation evt
             _ <- H.modify (\state ->
-                state { parseError = Nothing, profFile = Nothing })
+                state { parseError = Nothing, profFile = Nothing, loading = true })
             let trans = dataTransfer e
                 blob = getFile trans
             case blob of
-                Nothing -> pure unit
+                Nothing -> do
+                    _ <- H.modify (\state ->
+                        state { loading = false })
+                    pure unit
                 Just blob' -> do
                     fr <- H.liftEffect $ fileReader
-                    _ <- H.modify (\state ->
-                        state { loading = true })
                     let et = toEventTarget fr
                     subthingy et fr
                     t <- H.liftEffect $ readAsText blob' fr
