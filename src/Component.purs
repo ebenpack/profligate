@@ -128,7 +128,7 @@ component =
             _ <- H.modify (\state ->
                 case prof of
                     Left (ParseError err) ->
-                        state { parseError = Just err, profFile = Nothing }
+                        state { parseError = Just err, profFile = Nothing, loading = false }
                     Right profFile ->
                         let filteredCostCenterStack = filter (\v -> v.inherited.time > 0.0 || v.inherited.alloc > 0.0) profFile.costCenterStack
                         in state { profFile = Just (profFile { costCenterStack = filteredCostCenterStack }), parseError = Nothing, loading = false })
