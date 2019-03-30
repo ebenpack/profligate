@@ -4,7 +4,7 @@ import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
 
-spinner :: forall a b. H.HTML a b
+spinner :: forall a b m. H.ComponentHTML a b m
 spinner =
     HH.div
         [ HP.attr (H.AttrName "class") "spinner" ]

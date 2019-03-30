@@ -22,6 +22,10 @@ import Halogen.VDom.Types as HVT
 import Math (floor)
 import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Tree(..), Forest, depth)
 
+type ChildSlots = ()
+
+type Slot = H.Slot Query Void
+
 type AnnotatedCostTree =
     { offset :: Number
     , tree :: Tree CostCenterStackCosts
@@ -39,21 +43,20 @@ type State =
     , flameLegend :: Maybe CostCenterStackCosts
     }
 
-data Query a =
-      NoOp a
-    | ChangeFlameLegend (Maybe CostCenterStackCosts) a
+data Query a = NoOpQ a
 
-data ChildQuery a = Foo a
+data Action =
+      NoOp
+    | ChangeFlameLegend (Maybe CostCenterStackCosts)
 
-flameGraph :: forall m. MonadEffect m => MonadAff m => Profile -> H.Component HH.HTML Query Unit Void m
-flameGraph prof = H.component
+flameGraph :: forall f i o m. MonadEffect m => MonadAff m => Profile -> H.Component HH.HTML f i o m
+flameGraph prof = H.mkComponent
     { initialState: const initialState
     , render
-    , eval
-    , receiver: const Nothing
+    , eval: H.mkEval $ H.defaultEval { handleAction = eval }
     }
     where
-        render :: State -> H.ComponentHTML Query
+        render :: State -> H.ComponentHTML Action ChildSlots m
         render state =
             HH.div
                 [ HP.attr (H.AttrName "style") "width:100%;" ]
@@ -87,11 +90,12 @@ flameGraph prof = H.component
             , selected: Nothing
             , flameLegend: Nothing
             }
-        eval :: Query ~> H.ComponentDSL State Query Void m
-        eval (NoOp next) = pure next
-        eval (ChangeFlameLegend legend next) = do
+
+        eval :: Action -> H.HalogenM State Action ChildSlots o m Unit
+        eval NoOp = pure unit
+        eval (ChangeFlameLegend legend) = do
             _ <- H.modify $ \state -> state { flameLegend = legend }
-            pure next
+            pure unit
 
         dep :: Int
         dep = depth prof.costCenterStack
@@ -102,10 +106,10 @@ flameGraph prof = H.component
         totalHeight :: Number
         totalHeight = (toNumber dep) * rowHeight
 
-        doStuff :: Profile -> H.ComponentHTML Query
+        doStuff :: forall b. Profile -> H.ComponentHTML Action b m
         doStuff p = g [] (Arr.fromFoldable $ helper 0 0.0 p.costCenterStack)
 
-        helper :: Int -> Number -> Forest CostCenterStackCosts -> List (H.ComponentHTML Query)
+        helper :: forall b. Int -> Number -> Forest CostCenterStackCosts -> List (H.ComponentHTML Action b m)
         helper d baseOffset cs = (wrappedRow : descendents)
             where
                 offsetTop :: Number
@@ -117,11 +121,11 @@ flameGraph prof = H.component
                 rowWidth :: Number
                 rowWidth = calculateLeftOffset (foldr (\(Node { value: c }) acc -> acc + c.inherited.time) 0.0 cs)
 
-                row :: Array (H.ComponentHTML Query)
+                row :: Array (H.ComponentHTML Action b m)
                 row = Arr.foldr rowHelper [] $ Arr.fromFoldable annotatedTree
 
-                rowHelper :: AnnotatedCostTree -> Array (H.ComponentHTML Query) -> Array (H.ComponentHTML Query)
-                rowHelper { offset: offsetLeft, tree: (Node { value: c }) } acc = Arr.cons (drawCostCenter rowHeight offsetLeft offsetTop c) acc
+                rowHelper :: AnnotatedCostTree -> Array (H.ComponentHTML Action b m) -> Array (H.ComponentHTML Action b m)
+                rowHelper { offset: offsetLeft, tree: (Node { value: c }) } acc = Arr.cons (drawCostCenter offsetLeft offsetTop c) acc
 
                 annotateTree :: Tree CostCenterStackCosts -> List AnnotatedCostTree -> List AnnotatedCostTree
                 annotateTree c@(Node { value }) Nil =
@@ -137,14 +141,56 @@ flameGraph prof = H.component
                 annotatedTree :: List AnnotatedCostTree
                 annotatedTree = foldr annotateTree Nil $ reverse cs
 
-                descendents :: List (H.ComponentHTML Query)
+                descendents :: List (H.ComponentHTML Action b m)
                 descendents = concatMap descendentsHelper annotatedTree
 
-                descendentsHelper :: AnnotatedCostTree -> List (H.ComponentHTML Query)
+                descendentsHelper :: AnnotatedCostTree -> List (H.ComponentHTML Action b m)
                 descendentsHelper { offset: offset, tree: (Node { children: t }) } = helper (d + 1) offset t
 
-                wrappedRow :: H.ComponentHTML Query
+                wrappedRow :: H.ComponentHTML Action b m
                 wrappedRow = g [] row
+
+        drawCostCenter :: forall b. Number -> Number -> CostCenterStackCosts ->  H.ComponentHTML Action b m
+        drawCostCenter offsetLeft offsetTop cs =
+            let x = show offsetLeft
+                y = show offsetTop
+                width = show $ floor ((cs.inherited.time / 100.0) * totalWidth)
+                height = show rowHeight
+                eigthHeight = (rowHeight * 0.8)
+                fontSize = show eigthHeight
+                maxStringLen = (toNumber $ S.length cs.name) * eigthHeight
+                name = S.take (round maxStringLen) cs.name
+                col = getColor cs
+            in g
+                [ HE.onMouseEnter (\_ -> Just (ChangeFlameLegend $ Just cs))
+                , HE.onMouseLeave (\_ -> Just (ChangeFlameLegend Nothing))
+                , HP.attr (H.AttrName "class") "stack"]
+                [ rect
+                    [ HP.attr (H.AttrName "x") x
+                    , HP.attr (H.AttrName "y") y
+                    , HP.attr (H.AttrName "width") width
+                    , HP.attr (H.AttrName "height") height
+                    , HP.attr (H.AttrName "fill") col
+                    , HP.attr (H.AttrName "stroke-width") (show strokeWidth)
+                    ]
+                    [ title
+                        []
+                        [ text [] [ HH.text $ displayStackInfo cs ]]
+                    ]
+                , foreignObject
+                    [ HP.attr (H.AttrName "x") x
+                    , HP.attr (H.AttrName "y") y
+                    , HP.attr (H.AttrName "width") width
+                    , HP.attr (H.AttrName "height") height
+                    , HP.attr (H.AttrName "pointer-events") "none"
+                    ]
+                    [ div
+                        [ HP.attr (H.AttrName "style") ("font-size:" <> show (rowHeight * 0.7) <> "px;height" <> height<> ";")
+                        , HP.attr (H.AttrName "pointer-events") "none"
+                        ]
+                        [ HH.text $ cs.name ]
+                    ]
+                ]
 
 colors :: Array String
 colors =
@@ -175,49 +221,6 @@ getColor cs =
     in case (Arr.(!!) colors idx) of
         Just col' -> col'
         _ -> "red"
-
-
-drawCostCenter :: Number -> Number -> Number -> CostCenterStackCosts ->  H.ComponentHTML Query
-drawCostCenter rowHeight offsetLeft offsetTop cs =
-    let x = show offsetLeft
-        y = show offsetTop
-        width = show $ floor ((cs.inherited.time / 100.0) * totalWidth)
-        height = show rowHeight
-        eigthHeight = (rowHeight * 0.8)
-        fontSize = show eigthHeight
-        maxStringLen = (toNumber $ S.length cs.name) * eigthHeight
-        name = S.take (round maxStringLen) cs.name
-        col = getColor cs
-    in g
-        [ HE.onMouseEnter (\_ -> Just $ H.action (ChangeFlameLegend $ Just cs))
-        , HE.onMouseLeave (\_ -> Just $ H.action (ChangeFlameLegend Nothing))
-        , HP.attr (H.AttrName "class") "stack"]
-        [ rect
-            [ HP.attr (H.AttrName "x") x
-            , HP.attr (H.AttrName "y") y
-            , HP.attr (H.AttrName "width") width
-            , HP.attr (H.AttrName "height") height
-            , HP.attr (H.AttrName "fill") col
-            , HP.attr (H.AttrName "stroke-width") (show strokeWidth)
-            ]
-            [ title
-                []
-                [ text [] [ HH.text $ displayStackInfo cs ]]
-            ]
-        , foreignObject
-            [ HP.attr (H.AttrName "x") x
-            , HP.attr (H.AttrName "y") y
-            , HP.attr (H.AttrName "width") width
-            , HP.attr (H.AttrName "height") height
-            , HP.attr (H.AttrName "pointer-events") "none"
-            ]
-            [ div
-                [ HP.attr (H.AttrName "style") ("font-size:" <> show (rowHeight * 0.7) <> "px;height" <> height<> ";")
-                , HP.attr (H.AttrName "pointer-events") "none"
-                ]
-                [ HH.text $ cs.name ]
-            ]
-        ]
 
 svg :: forall r p i. Array (HP.IProp r i) -> Array (HHC.HTML p i) -> HHC.HTML p i
 svg props children =

@@ -3,7 +3,8 @@ module Profligate.Component where
 import Prelude
 
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromJust, isJust)
+import Data.Maybe (Maybe(..))
+import Data.Symbol (SProxy(..))
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Foreign (unsafeFromForeign)
@@ -12,15 +13,14 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Query.EventSource as HES
-import Partial.Unsafe (unsafePartial)
 import Profligate.FlameGraph as FG
 import Profligate.Profile.ParseProfile (parseProfFile)
 import Profligate.Profile.Profile (filter)
 import Profligate.Spinner (spinner)
 import Profligate.State (DisplayMode(..), Query(..), State)
+import Profligate.TreeViz as TV
 import Text.Parsing.StringParser (runParser, ParseError(..))
 import Web.Event.Event (EventType(..), preventDefault, stopPropagation)
-import Web.Event.EventTarget (addEventListener, eventListener)
 import Web.File.Blob (Blob)
 import Web.File.File (toBlob)
 import Web.File.FileList (item)
@@ -28,17 +28,21 @@ import Web.File.FileReader (result, fileReader, readAsText, toEventTarget)
 import Web.HTML.Event.DataTransfer (DataTransfer, files)
 import Web.HTML.Event.DragEvent (dataTransfer, toEvent)
 
-data Slot = FlameGraphSlot
-derive instance eqButtonSlot :: Eq Slot
-derive instance ordButtonSlot :: Ord Slot
 
-component :: forall m. MonadEffect m => MonadAff m => H.Component HH.HTML Query Unit Void m
+type ChildSlots =
+  ( a :: FG.Slot Unit
+  , b :: TV.Slot Unit
+  )
+
+_a = SProxy :: SProxy "a"
+_b = SProxy :: SProxy "b"
+
+component :: forall f i o m. MonadEffect m => MonadAff m => H.Component HH.HTML f i o m
 component =
-    H.parentComponent
+    H.mkComponent
         { initialState: const initialState
         , render
-        , eval
-        , receiver: const Nothing
+        , eval: H.mkEval $ H.defaultEval { handleAction = eval }
         }
     where
     initialState :: State
@@ -49,14 +53,11 @@ component =
         , loading: false
         }
 
-    itemStyle :: forall r i. String -> HP.IProp ( style :: String | r ) i
-    itemStyle = HP.attr (H.AttrName "style")
-
-    header :: H.ParentHTML Query FG.Query Slot m
+    header :: H.ComponentHTML Query ChildSlots m
     header =
         HH.header
-            [ HE.onDragOver (\e -> Just $ H.action (DragOver e))
-            , HE.onDrop (\e -> Just $ H.action (UploadFile e))
+            [ HE.onDragOver (\e -> Just (DragOver e))
+            , HE.onDrop (\e -> Just (UploadFile e))
             ]
             [ HH.h1_ [ HH.text "Profligate" ]
             , HH.div
@@ -66,7 +67,7 @@ component =
                 ]
             ]
 
-    render :: State -> H.ParentHTML Query FG.Query Slot m
+    render :: State -> H.ComponentHTML Query ChildSlots m
     render state =
         HH.div
             [ HP.attr (H.AttrName "class") "container" ]
@@ -74,11 +75,12 @@ component =
             , HH.main_ $ showMain state
             ]
 
-    showMain :: State -> Array (H.ParentHTML Query FG.Query Slot m)
-    showMain { loading, parseError, profFile } 
-        | loading = [ spinner ]
-        | isJust parseError = showError
-        | isJust profFile = [ HH.slot FlameGraphSlot (FG.flameGraph (unsafePartial $ fromJust profFile)) unit absurd ]
+    showMain :: State -> Array (H.ComponentHTML Query ChildSlots m)
+    showMain { loading } | loading = [ spinner ]
+    showMain { parseError: Just _ } = showError
+    showMain { profFile: Just prof, displayMode }
+        | displayMode == FlameGraph = [ HH.slot _a unit (FG.flameGraph prof) unit absurd ]
+    --     | displayMode == TreeViz = [ HH.slot _b unit (TV.treeViz prof) unit absurd ]
     showMain _ =
         [ HH.div
             [ HP.attr (H.AttrName "class") "text" ]
@@ -99,7 +101,7 @@ component =
             ]
         ]
 
-    showError :: Array (H.ParentHTML Query FG.Query Slot m)
+    showError :: Array (H.ComponentHTML Query ChildSlots m)
     showError =
         [ HH.div
             [ HP.attr (H.AttrName "class") "text" ]
@@ -115,14 +117,14 @@ component =
             ]
         ]
 
-    eval :: Query ~> H.ParentDSL State Query FG.Query Slot Void m
+    eval :: Query -> H.HalogenM State Query ChildSlots o m Unit
     eval = case _ of
-        NoOp next -> do
-            pure next
-        ChangeDisplayMode mode next -> do
+        NoOp -> do
+            pure unit
+        ChangeDisplayMode mode -> do
             _ <- H.modify $ \state -> state { displayMode = mode }
-            pure next
-        FileLoaded fr next -> do
+            pure unit
+        FileLoaded fr -> do
             t <- H.liftEffect $ result fr
             let prof = runParser parseProfFile $ unsafeFromForeign t
             _ <- H.modify (\state ->
@@ -132,13 +134,13 @@ component =
                     Right profFile ->
                         let filteredCostCenterStack = filter (\v -> v.inherited.time > 0.0 || v.inherited.alloc > 0.0) profFile.costCenterStack
                         in state { profFile = Just (profFile { costCenterStack = filteredCostCenterStack }), parseError = Nothing, loading = false })
-            pure next
-        DragOver e next -> do
+            pure unit
+        DragOver e -> do
             let evt = (toEvent e)
             H.liftEffect $ preventDefault evt
             H.liftEffect $ stopPropagation evt
-            pure next
-        UploadFile e next -> do
+            pure unit
+        UploadFile e -> do
             let evt = toEvent e
             H.liftEffect $ preventDefault evt
             H.liftEffect $ stopPropagation evt
@@ -157,16 +159,11 @@ component =
                     subthingy et fr
                     t <- H.liftEffect $ readAsText blob' fr
                     pure unit
-            pure next
+            pure unit
         where
-        bindLoad trgt f = do
-            el <- (eventListener f)
-            addEventListener (EventType "load") el false trgt
-
         subthingy trgt fr =
-            H.subscribe $ H.eventSource (bindLoad trgt) handleLoad
-            where
-            handleLoad e = pure $ FileLoaded fr $ HES.Done
+            void $ H.subscribe $ 
+                HES.eventListenerEventSource (EventType "load") trgt \evt -> pure $ FileLoaded fr
 
 getFile :: DataTransfer -> Maybe Blob
 getFile dt = do
