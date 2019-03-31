@@ -3,6 +3,7 @@ module Profligate.Component where
 import Prelude
 
 import Data.Either (Either(..))
+import Data.Eq (class Eq)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (SProxy(..))
 import Effect.Aff.Class (class MonadAff)
@@ -15,19 +16,37 @@ import Halogen.HTML.Properties as HP
 import Halogen.Query.EventSource as HES
 import Profligate.FlameGraph as FG
 import Profligate.Profile.ParseProfile (parseProfFile)
-import Profligate.Profile.Profile (filter)
+import Profligate.Profile.Profile (Profile, filter)
 import Profligate.Spinner (spinner)
-import Profligate.State (DisplayMode(..), Query(..), State)
 import Profligate.TreeViz as TV
 import Text.Parsing.StringParser (runParser, ParseError(..))
 import Web.Event.Event (EventType(..), preventDefault, stopPropagation)
 import Web.File.Blob (Blob)
 import Web.File.File (toBlob)
 import Web.File.FileList (item)
-import Web.File.FileReader (result, fileReader, readAsText, toEventTarget)
+import Web.File.FileReader (FileReader, result, fileReader, readAsText, toEventTarget)
 import Web.HTML.Event.DataTransfer (DataTransfer, files)
-import Web.HTML.Event.DragEvent (dataTransfer, toEvent)
+import Web.HTML.Event.DragEvent (DragEvent, dataTransfer, toEvent)
 
+data DisplayMode = 
+    FlameGraph
+  | TreeViz
+
+derive instance eqDisplayMode :: Eq DisplayMode
+
+data Query =
+      UploadFile DragEvent
+    | FileLoaded FileReader
+    | DragOver DragEvent
+    | ChangeDisplayMode DisplayMode
+    | NoOp
+
+type State =
+    { profFile :: Maybe Profile
+    , parseError :: Maybe String
+    , displayMode :: DisplayMode
+    , loading :: Boolean
+    }
 
 type ChildSlots =
   ( a :: FG.Slot Unit
