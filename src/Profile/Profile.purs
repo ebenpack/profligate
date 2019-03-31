@@ -32,6 +32,10 @@ filter f (n@Node { value, children }:xs) =
     then filter f xs
     else Node { value, children: filter f children } : filter f xs
 
+treeMap :: forall a b. (a -> b) -> Forest a -> Forest b
+treeMap _ Nil = Nil
+treeMap f (Node { value, children }:xs) = (Node{ value: f value, children: treeMap f children }) : treeMap f xs
+
 type TotalTime =
     { time :: Number
     , ticks :: Int

@@ -49,7 +49,7 @@ component =
     initialState =
         { profFile: Nothing
         , parseError: Nothing
-        , displayMode: FlameGraph
+        , displayMode: TreeViz
         , loading: false
         }
 
@@ -80,7 +80,7 @@ component =
     showMain { parseError: Just _ } = showError
     showMain { profFile: Just prof, displayMode }
         | displayMode == FlameGraph = [ HH.slot _a unit (FG.flameGraph prof) unit absurd ]
-    --     | displayMode == TreeViz = [ HH.slot _b unit (TV.treeViz prof) unit absurd ]
+        | displayMode == TreeViz = [ HH.slot _b unit (TV.treeViz prof) unit absurd ]
     showMain _ =
         [ HH.div
             [ HP.attr (H.AttrName "class") "text" ]

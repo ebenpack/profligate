@@ -59,7 +59,8 @@ flameGraph prof = H.mkComponent
         render :: State -> H.ComponentHTML Action ChildSlots m
         render state =
             HH.div
-                [ HP.attr (H.AttrName "style") "width:100%;" ]
+                [ HP.attr (H.AttrName "class") "flamegraph"
+                , HP.attr (H.AttrName "style") "width:100%;" ]
                 [ svg
                     [ HP.attr (H.AttrName "viewBox") ("0 0 " <> (show totalWidth) <> " " <> (show totalHeight))
                     , HP.attr (H.AttrName "width") (show totalWidth)
@@ -129,15 +130,10 @@ flameGraph prof = H.mkComponent
 
                 annotateTree :: Tree CostCenterStackCosts -> List AnnotatedCostTree -> List AnnotatedCostTree
                 annotateTree c@(Node { value }) Nil =
-                    if value.inherited.time > 0.0 || value.inherited.alloc > 0.0
-                    then ({ offset: baseOffset, tree: c } : Nil)
-                    else Nil
+                    { offset: baseOffset, tree: c } : Nil
                 annotateTree c@(Node { value }) (x@({ tree: Node { value: v }, offset: offset }) : xs) =
-                    if value.inherited.time > 0.0 || value.inherited.alloc > 0.0
-                    then ({ offset: offset + ((v.inherited.time / 100.0) * totalWidth), tree: c }) : x : xs
-                    else x : xs
+                    { offset: offset + ((v.inherited.time / 100.0) * totalWidth), tree: c } : x : xs
 
-                -- TODO: Does rowHelper unreverse this?
                 annotatedTree :: List AnnotatedCostTree
                 annotatedTree = foldr annotateTree Nil $ reverse cs
 
