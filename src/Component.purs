@@ -3,7 +3,7 @@ module Profligate.Component where
 import Prelude
 
 import Data.Either (Either(..))
-import Data.Eq (class Eq)
+import Data.Enum (class Enum, succ)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (SProxy(..))
 import Effect.Aff.Class (class MonadAff)
@@ -34,11 +34,23 @@ data DisplayMode =
 
 derive instance eqDisplayMode :: Eq DisplayMode
 
+instance displayModeOrd :: Ord DisplayMode where
+    compare FlameGraph TreeViz = LT
+    compare TreeViz FlameGraph = GT
+    compare _ _ = EQ
+
+
+instance displayModeEnum :: Enum DisplayMode where
+    succ FlameGraph = Just TreeViz
+    succ TreeViz = Just FlameGraph
+    pred FlameGraph = Just TreeViz
+    pred TreeViz = Just FlameGraph
+
 data Query =
       UploadFile DragEvent
     | FileLoaded FileReader
     | DragOver DragEvent
-    | ChangeDisplayMode DisplayMode
+    | ToggleDisplayMode
     | NoOp
 
 type State =
@@ -83,6 +95,18 @@ component =
                 [ HP.attr (H.AttrName "class") "dropzone" ]
                 [ HH.p_
                     [ HH.text "Plop yer .prof file here" ]
+                ]
+            , HH.div
+                [ HP.attr (H.AttrName "class") "displayToggle" ]
+                [ HH.label 
+                    [ HP.attr (H.AttrName "class") "switch"  ]
+                    [ HH.input
+                        [ HE.onClick (\e -> Just ToggleDisplayMode)
+                        , HP.attr (H.AttrName "type") "checkbox" ]
+                    , HH.span 
+                        [ HP.attr (H.AttrName "class") "slider round"  ]
+                        []
+                    ]
                 ]
             ]
 
@@ -140,8 +164,14 @@ component =
     eval = case _ of
         NoOp -> do
             pure unit
-        ChangeDisplayMode mode -> do
-            _ <- H.modify $ \state -> state { displayMode = mode }
+        ToggleDisplayMode -> do
+            displayMode <- H.gets (\state -> state.displayMode)
+            let mode = succ displayMode
+            case mode of
+                Nothing -> pure unit
+                Just newMode -> do
+                    _ <- H.modify $ \state -> state { displayMode = newMode }
+                    pure unit
             pure unit
         FileLoaded fr -> do
             t <- H.liftEffect $ result fr
