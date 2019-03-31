@@ -94,7 +94,7 @@ treeViz { costCenterStack } = H.mkComponent
     startingTree = annotatedTree 0 costCenterStack
 
     initialState :: State
-    initialState = { costCenterStack: startingTree, focus: Nil }
+    initialState = { costCenterStack: startingTree, focus: (0: Nil) }
 
     render :: State -> H.ComponentHTML Action ChildSlots m
     render state =
@@ -106,10 +106,16 @@ treeViz { costCenterStack } = H.mkComponent
                     [ HP.attr (H.AttrName "class") "col" ]
                     [ HH.div
                         [ HP.attr (H.AttrName "class") "info" ]
-                        [ showStats state.focus state.costCenterStack ]
+                        [ HH.div
+                            [ HP.attr (H.AttrName "class") "content" ]
+                            [ showStats state.focus state.costCenterStack ]
+                        ]
                     , HH.div
                         [ HP.attr (H.AttrName "class") "tree" ]
-                        [ showTree state.focus state.costCenterStack ]
+                        [ HH.div
+                            [ HP.attr (H.AttrName "class") "content" ]
+                            [ showTree state.focus state.costCenterStack ]
+                        ]
                     ]
                 ]
             , HH.div
@@ -152,7 +158,7 @@ treeViz { costCenterStack } = H.mkComponent
     drawTreeView focus coords (Node{ value: { stack, collapsed, depth, index }, children }) =
         [ HH.div_
             ([ HH.pre_
-                [ drawTitle (stack.name <> ": " <> show stack.individual.time) ] ] <> rest)
+                [ drawTitle stack.name ] ] <> rest)
         ]
         where
         rest =
@@ -192,7 +198,7 @@ treeViz { costCenterStack } = H.mkComponent
                 where
                 spanAttrs = 
                     [ HE.onClick (\_ -> Just (Focus coords))
-                    , HP.attr (H.AttrName "class") (if focus == coords then "selected" else "")
+                    , HP.attr (H.AttrName "class") (if focus == coords then "name selected" else "name")
                     ]
 
     eval :: Action -> H.HalogenM State Action ChildSlots o m Unit

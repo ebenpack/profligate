@@ -1,6 +1,6 @@
 
 body {
-    margin: 5% 10%;
+    margin: 1em 2em;
     background-color: #efeeee;
     box-sizing: border-box;
 }
@@ -20,7 +20,7 @@ a:link {
     align-items: stretch;
     justify-content: space-around;
     align-content: flex-start;
-    min-height: 80vh;
+    min-height: 95vh;
 }
 
 header {
@@ -158,7 +158,11 @@ main .text {
     cursor: pointer;
 }
 
-.treeviz .tree .selected {
+.treeviz .tree .name {
+    border: 2px solid transparent;
+}
+
+.treeviz .tree .name.selected {
     border: 2px solid blue;
 }
 
@@ -167,8 +171,17 @@ main .text {
     height: 50%;
 }
 
-.treeviz .stack {
+.treeviz .tree .content, .treeviz .info .content {
+    padding: 10px;
 }
+
+
+.treeviz .info h2 {
+    padding: 0;
+    margin: 0;
+}
+
+.treeviz .stack {}
 
 .treeviz .nested {
     border-left: 1px dashed black;
