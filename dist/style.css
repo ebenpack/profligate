@@ -51,7 +51,6 @@ header .dropzone:hover {
 }
 
 main {
-    padding-top:20px;
     flex: 1 1 auto;
     align-self: auto;
     background-color: #dcdcdc;
@@ -144,6 +143,7 @@ main .text {
     -webkit-flex-direction: column;
     -ms-flex-direction: column;
     flex-direction: column;
+    display: flex;
     width: 100%;
 }
 
@@ -168,7 +168,8 @@ main .text {
 
 .treeviz .tree, .treeviz .info {
     overflow: auto;
-    height: 50%;
+    min-height: 50%;
+    max-height: 50%; /* not sure why this works ¯\_(ツ)_/¯ */
 }
 
 .treeviz .tree .content, .treeviz .info .content {
