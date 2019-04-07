@@ -1,6 +1,6 @@
 
 body {
-    margin: 5% 10%;
+    margin: 1em 2em;
     background-color: #efeeee;
     box-sizing: border-box;
 }
@@ -20,7 +20,7 @@ a:link {
     align-items: stretch;
     justify-content: space-around;
     align-content: flex-start;
-    min-height: 80vh;
+    min-height: 95vh;
 }
 
 header {
@@ -51,7 +51,6 @@ header .dropzone:hover {
 }
 
 main {
-    padding-top:20px;
     flex: 1 1 auto;
     align-self: auto;
     background-color: #dcdcdc;
@@ -62,26 +61,204 @@ main .text {
     margin: 0 40px;
 }
 
-.stack  {
+.flamegraph .stack  {
     stroke: #929292;
 }
 
-.stack:hover {
+.flamegraph .stack:hover {
     opacity: 0.8;
 }
 
-.stack rect {
+.flamegraph .stack rect {
     rx: 2;
     ry: 2;
 }
 
-.stack div {
+.flamegraph .stack div {
     pointer-events: none;
     vertical-align: middle;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
     padding: 5px;
+}
+
+.treeviz pre {
+    margin: 0;
+    padding: 0;
+}
+
+.treeviz .arrow {
+    width: 20px;
+    text-align: center;
+    display: inline-block;
+}
+
+.treeviz, .treeviz .left {
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-direction: normal;
+    -webkit-box-orient: horizontal;
+    -webkit-flex-direction: row;
+    -ms-flex-direction: row;
+    flex-direction: row;
+    -webkit-flex-wrap: nowrap;
+    -ms-flex-wrap: nowrap;
+    flex-wrap: nowrap;
+    -webkit-box-pack: start;
+    -webkit-justify-content: flex-start;
+    -ms-flex-pack: start;
+    justify-content: flex-start;
+    -webkit-align-content: stretch;
+    -ms-flex-line-pack: stretch;
+    align-content: stretch;
+    -webkit-box-align: stretch;
+    -webkit-align-items: stretch;
+    -ms-flex-align: stretch;
+    align-items: stretch;
+}
+
+.treeviz {
+    flex: 1 1 auto;
+}
+
+.treeviz .left {
+    flex: 0 0 25%;
+    border-right: 1px solid black;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.treeviz .right {
+    -webkit-box-flex: 3 1 auto;
+    -webkit-flex: 3 1 auto;
+    -ms-flex: 3 1 auto;
+    flex: 3 1 auto;
+}
+
+.treeviz .col {
+    -webkit-box-orient: vertical;
+    -webkit-flex-direction: column;
+    -ms-flex-direction: column;
+    flex-direction: column;
+    display: flex;
+    width: 100%;
+}
+
+.treeviz div {
+    -webkit-align-self: auto;
+    -ms-flex-item-align: auto;
+    align-self: auto;
+}
+
+.treeviz .tree {
+    border-top: 1px solid black;
+    cursor: pointer;
+}
+
+.treeviz .tree .name {
+    border: 2px solid transparent;
+}
+
+.treeviz .tree .name.selected {
+    border: 2px solid blue;
+}
+
+.treeviz .tree, .treeviz .info {
+    overflow: auto;
+    min-height: 50%;
+    max-height: 50%; /* not sure why this works ¯\_(ツ)_/¯ */
+}
+
+.treeviz .tree .content, .treeviz .info .content {
+    padding: 10px;
+}
+
+
+.treeviz .info h2 {
+    padding: 0;
+    margin: 0;
+}
+
+.treeviz .stack {}
+
+.treeviz .nested {
+    border-left: 1px dashed black;
+    padding-left: 10px;
+    margin-left: 10px;
+}
+
+/* Toggle switch */
+
+.displayToggle {
+    flex: 0 0 auto;
+    padding-right: 20px;
+}
+
+/* The switch - the box around the slider */
+.switch {
+    position: relative;
+    display: inline-block;
+  }
+  
+  /* Hide default HTML checkbox */
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch [type="radio"]+span {
+    position: relative;
+    padding-left: 35px;
+    cursor: pointer;
+    display: inline-block;
+    height: 25px;
+    line-height: 25px;
+    font-size: 1rem;
+    -webkit-transition: .28s ease;
+    transition: .28s ease;
+}
+
+.switch [type="radio"]:checked+span {
+    position: relative;
+    padding-left: 35px;
+    cursor: pointer;
+    display: inline-block;
+    height: 25px;
+    line-height: 25px;
+    font-size: 1rem;
+    -webkit-transition: .28s ease;
+    transition: .28s ease;
+}
+
+.switch [type="radio"]+span::after {
+    border: 2px solid #26a69a;
+    border-radius: 50%;
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 4px;
+    width: 16px;
+    height: 16px;
+    z-index: 0;
+}
+
+.switch [type="radio"]:checked+span::after {
+    background-color: #26a69a;
+    border: 2px solid #26a69a;
+    border-radius: 50%;
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    margin: 4px;
+    width: 16px;
+    height: 16px;
+    z-index: 0;
 }
 
 /* Spinner */
