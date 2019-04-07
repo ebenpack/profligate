@@ -109,13 +109,16 @@ treeViz { costCenterStack } = H.mkComponent
 
     getNewCoords :: BisectoidCoords -> CostCenterStackCosts -> BisectoidCoords
     getNewCoords coords@{ x, y, width, height, direction } cs =
-        -- trace ((show newCoords) <> " " <> show cs ) \_ ->
         newCoords
         where
         newCoords = { x, y, width: newWidth, height: newHeight, direction: newDirection }
         area = (cs.inherited.time * 0.01) * totalArea
-        newWidth = if horizontal || height == 0.0  then width else (area / height)
-        newHeight = if not horizontal || width == 0.0 then height else (area / width)
+        newWidth =
+            let newW = if horizontal || height == 0.0  then width else (area / height) in -- TODO: this probably shouldn't be zero... why is?
+            if newW > 0.0 then newW else 0.0
+        newHeight =
+            let newH = if not horizontal || width == 0.0 then height else (area / width) in -- TODO: this probably shouldn't be zero... why is?
+            if newH > 0.0 then newH else 0.0
         newDirection = if not (width == 0.0) && (area / width) > width then Horiz else Vert
         horizontal = newDirection == Horiz
 
