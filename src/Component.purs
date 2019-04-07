@@ -3,7 +3,6 @@ module Profligate.Component where
 import Prelude
 
 import Data.Either (Either(..))
-import Data.Enum (class Enum, succ)
 import Data.Maybe (Maybe(..))
 import Data.Symbol (SProxy(..))
 import Effect.Aff.Class (class MonadAff)
@@ -19,6 +18,7 @@ import Profligate.Profile.ParseProfile (parseProfFile)
 import Profligate.Profile.Profile (Profile, filter)
 import Profligate.Spinner (spinner)
 import Profligate.TreeViz as TV
+import Profligate.Types (AnalysisMode(..), DisplayMode(..))
 import Text.Parsing.StringParser (runParser, ParseError(..))
 import Web.Event.Event (EventType(..), preventDefault, stopPropagation)
 import Web.File.Blob (Blob)
@@ -28,35 +28,19 @@ import Web.File.FileReader (FileReader, result, fileReader, readAsText, toEventT
 import Web.HTML.Event.DataTransfer (DataTransfer, files)
 import Web.HTML.Event.DragEvent (DragEvent, dataTransfer, toEvent)
 
-data DisplayMode = 
-    FlameGraph
-  | TreeViz
-
-derive instance eqDisplayMode :: Eq DisplayMode
-
-instance displayModeOrd :: Ord DisplayMode where
-    compare FlameGraph TreeViz = LT
-    compare TreeViz FlameGraph = GT
-    compare _ _ = EQ
-
-
-instance displayModeEnum :: Enum DisplayMode where
-    succ FlameGraph = Just TreeViz
-    succ TreeViz = Just FlameGraph
-    pred FlameGraph = Just TreeViz
-    pred TreeViz = Just FlameGraph
-
 data Query =
       UploadFile DragEvent
     | FileLoaded FileReader
     | DragOver DragEvent
     | SetDisplayMode DisplayMode
+    | SetAnalysisMode AnalysisMode
     | NoOp
 
 type State =
     { profFile :: Maybe Profile
     , parseError :: Maybe String
     , displayMode :: DisplayMode
+    , analysisMode :: AnalysisMode
     , loading :: Boolean
     }
 
@@ -81,6 +65,7 @@ component =
         { profFile: Nothing
         , parseError: Nothing
         , displayMode: TreeViz
+        , analysisMode: Time
         , loading: false
         }
 
@@ -93,30 +78,60 @@ component =
             [ HH.h1_ [ HH.text "Profligate" ]
             , HH.div
                 [ HP.attr (H.AttrName "class") "displayToggle" ]
-                [ HH.span_
-                    [ HH.label 
-                        [ HP.attr (H.AttrName "class") "switch"  ]
-                        [ HH.input
-                            ([ HE.onClick (\e -> Just $ SetDisplayMode TreeViz)
-                            , HP.attr (H.AttrName "type") "radio"
-                            , HP.attr (H.AttrName "name") "displayMode" 
-                            ]  <> if state.displayMode == TreeViz then [ HP.attr (H.AttrName "checked") "checked" ] else [])
-                        , HH.span
-                            []
-                            [ HH.text "Tree Vizualizer" ]
+                [ HH.p_
+                    [ HH.span_
+                        [ HH.label
+                            [ HP.attr (H.AttrName "class") "switch"  ]
+                            [ HH.input
+                                ([ HE.onClick (\e -> Just $ SetDisplayMode TreeViz)
+                                , HP.attr (H.AttrName "type") "radio"
+                                , HP.attr (H.AttrName "name") "displayMode"
+                                ]  <> if state.displayMode == TreeViz then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                            , HH.span
+                                []
+                                [ HH.text "Tree Vizualizer" ]
+                            ]
                         ]
-                     ]
-                , HH.span_ 
-                    [ HH.label 
-                        [ HP.attr (H.AttrName "class") "switch"  ]
-                        [ HH.input
-                            ([ HE.onClick (\e -> Just $ SetDisplayMode FlameGraph)
-                             , HP.attr (H.AttrName "type") "radio"
-                             , HP.attr (H.AttrName "name") "displayMode"
-                             ]  <> if state.displayMode == FlameGraph then [ HP.attr (H.AttrName "checked") "checked" ] else [])
-                        , HH.span
-                            []
-                            [ HH.text "Flame Grap" ]
+                    , HH.span_
+                        [ HH.label
+                            [ HP.attr (H.AttrName "class") "switch"  ]
+                            [ HH.input
+                                ([ HE.onClick (\e -> Just $ SetDisplayMode FlameGraph)
+                                , HP.attr (H.AttrName "type") "radio"
+                                , HP.attr (H.AttrName "name") "displayMode"
+                                ]  <> if state.displayMode == FlameGraph then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                            , HH.span
+                                []
+                                [ HH.text "Flame Grap" ]
+                            ]
+                        ]
+                    ]
+                , HH.p_
+                    [ HH.span_
+                        [ HH.label
+                            [ HP.attr (H.AttrName "class") "switch"  ]
+                            [ HH.input
+                                ([ HE.onClick (\e -> Just $ SetAnalysisMode Time)
+                                , HP.attr (H.AttrName "type") "radio"
+                                , HP.attr (H.AttrName "name") "analysisMode"
+                                ]  <> if state.analysisMode == Time then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                            , HH.span
+                                []
+                                [ HH.text "Time" ]
+                            ]
+                        ]
+                    , HH.span_
+                        [ HH.label
+                            [ HP.attr (H.AttrName "class") "switch"  ]
+                            [ HH.input
+                                ([ HE.onClick (\e -> Just $ SetAnalysisMode Alloc)
+                                , HP.attr (H.AttrName "type") "radio"
+                                , HP.attr (H.AttrName "name") "analysisMode"
+                                ]  <> if state.analysisMode == Alloc then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                            , HH.span
+                                []
+                                [ HH.text "Alloc" ]
+                            ]
                         ]
                     ]
                 ]
@@ -136,9 +151,9 @@ component =
     showMain :: State -> Array (H.ComponentHTML Query ChildSlots m)
     showMain { loading } | loading = [ spinner ]
     showMain { parseError: Just _ } = showError
-    showMain { profFile: Just prof, displayMode }
-        | displayMode == FlameGraph = [ HH.slot _a unit (FG.flameGraph prof) unit absurd ]
-        | displayMode == TreeViz = [ HH.slot _b unit (TV.treeViz prof) unit absurd ]
+    showMain { profFile: Just prof, displayMode, analysisMode }
+        | displayMode == FlameGraph = [ HH.slot _a unit (FG.flameGraph prof analysisMode) analysisMode absurd ]
+        | displayMode == TreeViz = [ HH.slot _b unit (TV.treeViz prof analysisMode) analysisMode absurd ]
     showMain _ =
         [ HH.div
             [ HP.attr (H.AttrName "class") "text" ]
@@ -178,6 +193,9 @@ component =
     eval :: Query -> H.HalogenM State Query ChildSlots o m Unit
     eval = case _ of
         NoOp -> do
+            pure unit
+        SetAnalysisMode mode -> do
+            _ <- H.modify $ \state -> state { analysisMode = mode }
             pure unit
         SetDisplayMode mode -> do
             _ <- H.modify $ \state -> state { displayMode = mode }
@@ -220,7 +238,7 @@ component =
             pure unit
         where
         subthingy trgt fr =
-            void $ H.subscribe $ 
+            void $ H.subscribe $
                 HES.eventListenerEventSource (EventType "load") trgt \evt -> pure $ FileLoaded fr
 
 getFile :: DataTransfer -> Maybe Blob
