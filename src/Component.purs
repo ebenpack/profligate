@@ -50,7 +50,7 @@ data Query =
       UploadFile DragEvent
     | FileLoaded FileReader
     | DragOver DragEvent
-    | ToggleDisplayMode
+    | SetDisplayMode DisplayMode
     | NoOp
 
 type State =
@@ -84,37 +84,52 @@ component =
         , loading: false
         }
 
-    header :: H.ComponentHTML Query ChildSlots m
-    header =
+    header :: State -> H.ComponentHTML Query ChildSlots m
+    header state =
         HH.header
             [ HE.onDragOver (\e -> Just (DragOver e))
             , HE.onDrop (\e -> Just (UploadFile e))
             ]
             [ HH.h1_ [ HH.text "Profligate" ]
             , HH.div
-                [ HP.attr (H.AttrName "class") "dropzone" ]
-                [ HH.p_
-                    [ HH.text "Plop yer .prof file here" ]
-                ]
-            , HH.div
                 [ HP.attr (H.AttrName "class") "displayToggle" ]
-                [ HH.label 
-                    [ HP.attr (H.AttrName "class") "switch"  ]
-                    [ HH.input
-                        [ HE.onClick (\e -> Just ToggleDisplayMode)
-                        , HP.attr (H.AttrName "type") "checkbox" ]
-                    , HH.span 
-                        [ HP.attr (H.AttrName "class") "slider round"  ]
-                        []
+                [ HH.span_
+                    [ HH.label 
+                        [ HP.attr (H.AttrName "class") "switch"  ]
+                        [ HH.input
+                            ([ HE.onClick (\e -> Just $ SetDisplayMode TreeViz)
+                            , HP.attr (H.AttrName "type") "radio"
+                            , HP.attr (H.AttrName "name") "displayMode" 
+                            ]  <> if state.displayMode == TreeViz then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                        , HH.span
+                            []
+                            [ HH.text "Tree Vizualizer" ]
+                        ]
+                     ]
+                , HH.span_ 
+                    [ HH.label 
+                        [ HP.attr (H.AttrName "class") "switch"  ]
+                        [ HH.input
+                            ([ HE.onClick (\e -> Just $ SetDisplayMode FlameGraph)
+                             , HP.attr (H.AttrName "type") "radio"
+                             , HP.attr (H.AttrName "name") "displayMode"
+                             ]  <> if state.displayMode == FlameGraph then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                        , HH.span
+                            []
+                            [ HH.text "Flame Grap" ]
+                        ]
                     ]
                 ]
+            , HH.div
+                [ HP.attr (H.AttrName "class") "dropzone" ]
+                [ HH.p_  [ HH.text "Plop yer .prof file here" ] ]
             ]
 
     render :: State -> H.ComponentHTML Query ChildSlots m
     render state =
         HH.div
             [ HP.attr (H.AttrName "class") "container" ]
-            [ header
+            [ header state
             , HH.main_ $ showMain state
             ]
 
@@ -164,14 +179,8 @@ component =
     eval = case _ of
         NoOp -> do
             pure unit
-        ToggleDisplayMode -> do
-            displayMode <- H.gets (\state -> state.displayMode)
-            let mode = succ displayMode
-            case mode of
-                Nothing -> pure unit
-                Just newMode -> do
-                    _ <- H.modify $ \state -> state { displayMode = newMode }
-                    pure unit
+        SetDisplayMode mode -> do
+            _ <- H.modify $ \state -> state { displayMode = mode }
             pure unit
         FileLoaded fr -> do
             t <- H.liftEffect $ result fr

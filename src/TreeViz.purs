@@ -298,7 +298,7 @@ treeViz { costCenterStack } = H.mkComponent
                     , HP.attr (H.AttrName "y") (show y)
                     , HP.attr (H.AttrName "width") (show width)
                     , HP.attr (H.AttrName "height") (show height)
-                    , HP.attr (H.AttrName "stroke") "black"
+                    , HP.attr (H.AttrName "stroke") "white"
                     , HP.attr (H.AttrName "stroke-width") "2"
                     , HP.attr (H.AttrName "fill") "none"
                     ] [] ]
