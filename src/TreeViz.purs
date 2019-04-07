@@ -2,7 +2,8 @@ module Profligate.TreeViz where
 
 import Data.Array as Arr
 import Data.Char (toCharCode)
-import Data.Foldable (foldr)
+import Data.Foldable (foldr, sum)
+import Data.Functor (map)
 import Data.List (List(..), (:), reverse, null, snoc)
 import Data.Maybe (Maybe(..))
 import Data.String.CodeUnits (toCharArray)
@@ -13,7 +14,7 @@ import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Prelude (class Show, class Eq, Unit, Void, bind, const, mod, not, pure, show, unit, (||), (&&), ($), (+), (*), (-), (/), (<>), (>), (==))
-import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Forest, Tree(..))
+import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Forest, Tree(..), treeMap)
 import Profligate.Util (svg, rect, largeColorSet)
 
 type Slot = H.Slot Query Void
@@ -92,7 +93,7 @@ treeViz { costCenterStack } = H.mkComponent
         let { width, height, direction } = getNewCoords coords value
             newCoords = { x: coords.x, y: coords.y, width, height, direction } in
         (Node
-            { value: { index: 0, depth, collapsed: false, stack: value, coords: newCoords }
+            { value: { index: 0, depth, collapsed: true, stack: value, coords: newCoords }
             , children: (annotatedTree (depth + 1) newCoords children) }
         ) : Nil
     annotateTree depth outercoords (Node { value, children }) (n@(Node{ value: { index, stack, coords } }) : ns) =
@@ -103,7 +104,7 @@ treeViz { costCenterStack } = H.mkComponent
             newHeight = outercoords.height - (newY - outercoords.y)
             newCoords = getNewCoords { x: newX, y: newY, width: newWidth, height: newHeight, direction: coords.direction } value in
         (Node
-            { value: { index: index + 1, depth, collapsed: false, stack: value, coords: newCoords }
+            { value: { index: index + 1, depth, collapsed: true, stack: value, coords: newCoords }
             , children: (annotatedTree (depth + 1) newCoords children) }
         ) : n : ns
 
@@ -140,10 +141,17 @@ treeViz { costCenterStack } = H.mkComponent
     getin _ xs = Nothing
 
     uncollapse :: TreeCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
-    uncollapse = lapse false -- TODO: Collapse childrens
+    uncollapse coords stack = setin setUncollapsed coords stack
+        where
+        setUncollapsed (Node{ value, children }) = (Node{ value: value { collapsed = false }, children })
 
     collapse :: TreeCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
-    collapse = lapse true
+    collapse coords stack = setin setCollapse coords stack
+        where
+        setCollapse :: Tree AnnotatedCostCenterStackCosts -> Tree AnnotatedCostCenterStackCosts
+        setCollapse (Node{ value, children} ) = Node{ value: value { collapsed = true }, children: treeMap doCollapse children }
+        doCollapse :: AnnotatedCostCenterStackCosts -> AnnotatedCostCenterStackCosts
+        doCollapse s = s { collapsed = true }
 
     startingTree :: AnnotatedCostCenterStackTree
     startingTree = annotatedTree 0 { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight, direction: Horiz } costCenterStack
@@ -315,7 +323,8 @@ treeViz { costCenterStack } = H.mkComponent
             else showBisectoidHelper focus currentCoords children
         drawBox =
             rect
-                [ HP.attr (H.AttrName "x") (show x)
+                [ HE.onClick (\_ -> Just (Focus currentCoords))
+                , HP.attr (H.AttrName "x") (show x)
                 , HP.attr (H.AttrName "y") (show y)
                 , HP.attr (H.AttrName "width") (show width)
                 , HP.attr (H.AttrName "height") (show height)
@@ -344,7 +353,7 @@ treeViz { costCenterStack } = H.mkComponent
 -- TODO: Move to util?
 getColor :: CostCenterStackCosts -> String
 getColor cs =
-    let tot = Arr.foldr (\c acc -> acc + (toCharCode c)) 0 (toCharArray (cs.mod <> cs.name))
+    let tot = sum (map toCharCode (toCharArray (cs.mod <> cs.name <> cs.src)))
         idx = tot `mod` (Arr.length largeColorSet)
     in case (Arr.(!!) largeColorSet idx) of
         Just col' -> col'
