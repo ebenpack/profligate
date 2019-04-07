@@ -19,7 +19,7 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Math (floor)
 import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Tree(..), Forest, depth)
-import Profligate.Util (svg, rect, text, title, g, foreignObject)
+import Profligate.Util (svg, rect, text, title, g, foreignObject, pastelColorSet)
 
 type ChildSlots = ()
 
@@ -187,20 +187,6 @@ flameGraph prof = H.mkComponent
                     ]
                 ]
 
-colors :: Array String
-colors =
-    [ "#B5D8EB"
-    , "#DCF7F3"
-    , "#E3AAD6"
-    , "#F5A2A2"
-    , "#F8DAFB"
-    , "#F9CDAD"
-    , "#FFBDD8"
-    , "#FFC8BA"
-    , "#FFD8D8"
-    , "#FFFCDD"
-    ]
-
 displayStackInfo :: CostCenterStackCosts -> String
 displayStackInfo cs =
     "Function: " <> cs.name <>
@@ -212,7 +198,7 @@ displayStackInfo cs =
 getColor :: CostCenterStackCosts -> String
 getColor cs =
     let tot = Arr.foldr (\c acc -> acc + (toCharCode c)) 0 (toCharArray cs.mod)
-        idx = tot `mod` (Arr.length colors)
-    in case (Arr.(!!) colors idx) of
+        idx = tot `mod` (Arr.length pastelColorSet)
+    in case (Arr.(!!) pastelColorSet idx) of
         Just col' -> col'
         _ -> "red"
