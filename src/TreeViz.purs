@@ -306,17 +306,29 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
             ]
             ((Arr.fromFoldable $ showBisectoidHelper focus Nil cs) <> focusRing)
         where
+        focusRing :: Array (H.ComponentHTML Action ChildSlots m)
         focusRing = fromMaybe [] $ do
             cs' <- getin focus cs
             { x, y, width, height } <- cs'.coords
             pure
                 [ rect
-                    [ HP.attr (H.AttrName "x") (show x)
-                    , HP.attr (H.AttrName "y") (show y)
-                    , HP.attr (H.AttrName "width") (show width)
-                    , HP.attr (H.AttrName "height") (show height)
+                    [ HP.attr (H.AttrName "x") (show (x + 1.5)) -- TODO: precalculate shared stuff
+                    , HP.attr (H.AttrName "y") (show (y + 1.5))
+                    , HP.attr (H.AttrName "width") (show (width - 3.0))
+                    , HP.attr (H.AttrName "height") (show (height - 3.0))
+                    , HP.attr (H.AttrName "stroke") "black"
+                    , HP.attr (H.AttrName "stroke-width") "3"
+                    , HP.attr (H.AttrName "stroke-dasharray") "5,5,5"
+                    , HP.attr (H.AttrName "fill") "none"
+                    ] []
+                , rect
+                    [ HP.attr (H.AttrName "x") (show (x + 1.5))
+                    , HP.attr (H.AttrName "y") (show (y + 1.5))
+                    , HP.attr (H.AttrName "width") (show (width - 3.0))
+                    , HP.attr (H.AttrName "height") (show (height - 3.0))
                     , HP.attr (H.AttrName "stroke") "white"
-                    , HP.attr (H.AttrName "stroke-width") "2"
+                    , HP.attr (H.AttrName "stroke-width") "3"
+                    , HP.attr (H.AttrName "stroke-dasharray") "0,5,0"
                     , HP.attr (H.AttrName "fill") "none"
                     ] []
                 ]
