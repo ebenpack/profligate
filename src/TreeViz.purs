@@ -16,7 +16,7 @@ import Halogen.HTML.Properties as HP
 import Prelude (class Show, class Eq, Unit, Void, bind, const, mod, not, pure, show, unit, (||), (&&), ($), (+), (*), (-), (/), (<>), (>), (==))
 import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Forest, Tree(..), treeMap)
 import Profligate.Types (AnalysisMode(..))
-import Profligate.Util (svg, rect, largeColorSet)
+import Profligate.Util (svg, rect, text, title, largeColorSet)
 
 type Input = AnalysisMode
 
@@ -203,7 +203,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
                 ]
             , HH.div
                 [ HP.attr (H.AttrName "class") "right" ]
-                [ showBisectoid state.focus state.costCenterStack ]
+                [ showBisectoid state.analysisMode state.focus state.costCenterStack ]
             ]
 
     --------
@@ -296,15 +296,15 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     -- Bisectoid
     ------------
 
-    showBisectoid :: TreeCoords -> AnnotatedCostCenterStackTree -> H.ComponentHTML Action ChildSlots m
-    showBisectoid focus cs =
+    showBisectoid :: AnalysisMode -> TreeCoords -> AnnotatedCostCenterStackTree -> H.ComponentHTML Action ChildSlots m
+    showBisectoid am focus cs =
         svg
             [ HP.attr (H.AttrName "viewBox") ("0 0 " <> (show totalWidth) <> " " <> (show totalHeight))
             , HP.attr (H.AttrName "width") (show totalWidth)
             , HP.attr (H.AttrName "height") (show totalHeight)
             , HP.attr (H.AttrName "style") "width: 100%; height: auto;"
             ]
-            ((Arr.fromFoldable $ showBisectoidHelper focus Nil cs) <> focusRing)
+            ((Arr.fromFoldable $ showBisectoidHelper am focus Nil cs) <> focusRing)
         where
         focusRing :: Array (H.ComponentHTML Action ChildSlots m)
         focusRing = fromMaybe [] $ do
@@ -333,23 +333,29 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
                     ] []
                 ]
 
-    showBisectoidHelper :: TreeCoords -> TreeCoords -> AnnotatedCostCenterStackTree -> Array (H.ComponentHTML Action ChildSlots m)
-    showBisectoidHelper focus treeCoords cs = row
+    showBisectoidHelper :: AnalysisMode -> TreeCoords -> TreeCoords -> AnnotatedCostCenterStackTree -> Array (H.ComponentHTML Action ChildSlots m)
+    showBisectoidHelper am focus treeCoords cs = row
         where
             row :: Array (H.ComponentHTML Action ChildSlots m)
             row = (Arr.foldr rowHelper [] $ Arr.fromFoldable cs)
 
             rowHelper :: Tree AnnotatedCostCenterStackCosts -> Array (H.ComponentHTML Action ChildSlots m) -> Array (H.ComponentHTML Action ChildSlots m)
-            rowHelper c@(Node{ value: { index, stack: { inherited: { time } } } }) acc = (drawBisectoidView focus (snoc treeCoords index) c) <> acc
+            rowHelper c@(Node{ value: { index, stack: { inherited: { time } } } }) acc = (drawBisectoidView am focus (snoc treeCoords index) c) <> acc
 
-    drawBisectoidView :: TreeCoords -> TreeCoords -> Tree AnnotatedCostCenterStackCosts -> Array (H.ComponentHTML Action ChildSlots m)
-    drawBisectoidView focus currentCoords (Node{ value: { stack: cs@{ name }, collapsed, depth, index, coords }, children }) =
+    -- TODO: Duplicated, move to util?
+    displayStackInfo :: AnalysisMode -> CostCenterStackCosts -> String
+    displayStackInfo am cs =
+        "Function: " <> cs.name <>
+            " (" <> show cs.entries <> " entries, " <> show (getCost am cs) <> "%)"
+
+    drawBisectoidView :: AnalysisMode -> TreeCoords -> TreeCoords -> Tree AnnotatedCostCenterStackCosts -> Array (H.ComponentHTML Action ChildSlots m)
+    drawBisectoidView am focus currentCoords (Node{ value: { stack: cs@{ name }, collapsed, depth, index, coords }, children }) =
         drawBox <> rest
         where
         rest =
             if collapsed
             then []
-            else showBisectoidHelper focus currentCoords children
+            else showBisectoidHelper am focus currentCoords children
         drawBox =
             case coords of
                 Just { x, y, width, height } ->
@@ -360,9 +366,11 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
                         , HP.attr (H.AttrName "width") (show width)
                         , HP.attr (H.AttrName "height") (show height)
                         , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
-                        , HP.attr (H.AttrName "data-thing") name
                         ]
-                        []
+                        [ title
+                            []
+                            [ text [] [ HH.text $ displayStackInfo am cs ]]
+                        ]
                     ]
                 Nothing -> []
 
