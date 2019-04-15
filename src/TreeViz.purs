@@ -403,9 +403,9 @@ treemap am xs coords@({ width, height }) =
         Alloc -> (alloc * 0.01)
 
 squarify ∷ (Tree AnnotatedCostCenterStackCosts -> Number) -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
-squarify f scale xs rect =
-    let sorted = L.sortBy (flip compare `on` f) xs
-    in join $ go Nil rect sorted Nil 0.0 (shortestSide rect)
+squarify f scale cs coords =
+    let sorted = L.sortBy (flip compare `on` f) cs
+    in join $ go Nil coords sorted Nil 0.0 (shortestSide coords)
     where
     go ∷ List (AnnotatedCostCenterStackTree) -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree -> Number -> Number -> List (AnnotatedCostCenterStackTree)
     go result rect xs row s w =
@@ -437,8 +437,8 @@ squarify f scale xs rect =
             snd $ F.foldl
                 (\(Tuple offset result) r@(Node{ value, children }) ->
                     let h = f r * scale / aw
-                        coords = { x, y: offset, width: aw, height: h} in
-                    Tuple (offset + h) ((Node{ value: value { coords = coords }, children }) : result))
+                        newCoords = { x, y: offset, width: aw, height: h} in
+                    Tuple (offset + h) ((Node{ value: value { coords = newCoords }, children }) : result))
                 (Tuple y Nil)
                 row
         else
@@ -446,8 +446,8 @@ squarify f scale xs rect =
             snd $ F.foldl
                 (\(Tuple offset result) r@(Node{ value, children }) ->
                     let w = f r * scale / ah
-                        coords = { x: offset, y, width: w, height: ah } in
-                    Tuple (offset + w) ((Node{ value: value { coords = coords }, children }) : result))
+                        newCoords = { x: offset, y, width: w, height: ah } in
+                    Tuple (offset + w) ((Node{ value: value { coords = newCoords }, children }) : result))
                 (Tuple x Nil)
                 row
 
