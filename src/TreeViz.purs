@@ -1,19 +1,24 @@
 module Profligate.TreeViz where
 
+import Prelude
+
 import Data.Array as Arr
 import Data.Char (toCharCode)
 import Data.Foldable (foldr, sum)
-import Data.Functor (map)
+import Data.Foldable as F
 import Data.List (List(..), (:), reverse, null, snoc)
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.List as L
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String.CodeUnits (toCharArray)
+import Data.Function (on)
+import Data.Tuple (Tuple(..), snd)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Prelude (class Show, class Eq, Unit, Void, bind, const, mod, not, pure, show, unit, (||), (&&), ($), (+), (*), (-), (/), (<>), (>), (==))
+import Math (abs)
 import Profligate.Profile.Profile (Profile, CostCenterStackCosts, Forest, Tree(..), treeMap)
 import Profligate.Types (AnalysisMode(..))
 import Profligate.Util (svg, rect, text, title, largeColorSet)
@@ -26,23 +31,11 @@ type ChildSlots = ()
 
 type TreeCoords = List Int
 
-data BisectoidDirection = Vert | Horiz
-
-instance showBisectoidDirection :: Show BisectoidDirection where
-    show Vert = "Vert"
-    show Horiz = "Horiz"
-
-instance eqBisectoidDirection :: Eq BisectoidDirection where
-    eq Vert Vert = true
-    eq Horiz Horiz = true
-    eq _ _ = false
-
 type BisectoidCoords =
     { x :: Number
     , y :: Number
     , width :: Number
     , height :: Number
-    , direction :: BisectoidDirection
     }
 
 type State =
@@ -68,7 +61,7 @@ type AnnotatedCostCenterStackCosts =
     , index :: Int
     , collapsed :: Boolean
     , stack :: CostCenterStackCosts
-    , coords :: Maybe BisectoidCoords
+    , coords :: BisectoidCoords
     }
 
 type AnnotatedCostCenterStackTree = Forest AnnotatedCostCenterStackCosts
@@ -93,44 +86,15 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     totalArea :: Number
     totalArea = totalWidth * totalHeight
 
-    annotatedTree :: AnalysisMode -> Int -> BisectoidCoords -> Forest CostCenterStackCosts -> AnnotatedCostCenterStackTree
-    annotatedTree am dep coords cs = reverse $ foldr (annotateTree am dep coords) Nil $ reverse cs
+    annotatedTree :: Int -> Forest CostCenterStackCosts -> AnnotatedCostCenterStackTree
+    annotatedTree dep cs = reverse $ foldr (annotateTree dep) Nil $ reverse cs
 
-    annotateTree :: AnalysisMode -> Int -> BisectoidCoords -> Tree CostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
-    annotateTree am depth coords (Node { value, children }) Nil =
-        let { width, height, direction } = getNewCoords am coords value
-            newCoords = { x: coords.x, y: coords.y, width, height, direction } in
+    annotateTree :: Int -> Tree CostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
+    annotateTree depth (Node { value, children }) xs =
         (Node
-            { value: { index: 0, depth, collapsed: true, stack: value, coords: Just newCoords }
-            , children: (annotatedTree am (depth + 1) newCoords children) }
-        ) : Nil
-    annotateTree am depth outercoords (Node { value, children }) (n@(Node{ value: { index, stack, coords } }) : ns) =
-        let justCoords = fromMaybe { x: 0.0, y: 0.0, width: 0.0, height: 0.0, direction: Horiz } coords
-            horizontal = justCoords.direction == Horiz
-            newX = if horizontal then justCoords.x else justCoords.x + justCoords.width
-            newY = if horizontal then justCoords.y + justCoords.height else justCoords.y
-            newWidth = outercoords.width - (newX - outercoords.x)
-            newHeight = outercoords.height - (newY - outercoords.y)
-            newCoords = getNewCoords am { x: newX, y: newY, width: newWidth, height: newHeight, direction: justCoords.direction } value in
-        (Node
-            { value: { index: index + 1, depth, collapsed: true, stack: value, coords: Just newCoords }
-            , children: (annotatedTree am (depth + 1) newCoords children) }
-        ) : n : ns
-
-    getNewCoords :: AnalysisMode -> BisectoidCoords -> CostCenterStackCosts -> BisectoidCoords
-    getNewCoords am coords@{ x, y, width, height, direction } cs =
-        newCoords
-        where
-        newCoords = { x, y, width: newWidth, height: newHeight, direction: newDirection }
-        area = ((getCost am cs) * 0.01) * totalArea
-        newWidth =
-            let newW = if horizontal || height == 0.0  then width else (area / height) in -- TODO: this probably shouldn't be zero... why is?
-            if newW > 0.0 then newW else 0.0
-        newHeight =
-            let newH = if not horizontal || width == 0.0 then height else (area / width) in -- TODO: this probably shouldn't be zero... why is?
-            if newH > 0.0 then newH else 0.0
-        newDirection = if not (width == 0.0) && (area / width) > width then Horiz else Vert
-        horizontal = newDirection == Horiz
+            { value: { index: 0, depth, collapsed: true, stack: value, coords: { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } }
+            , children: (annotatedTree (depth + 1) children) }
+        ) : xs
 
     lapse :: Boolean -> TreeCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
     lapse b coords stack = setin setCollapsed coords stack
@@ -149,8 +113,8 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     getin (m:ns) (y:ys) = getin ((m-1):ns) ys
     getin _ xs = Nothing
 
-    getCost :: AnalysisMode -> CostCenterStackCosts -> Number
-    getCost am cs = case am of
+    getCsCost :: AnalysisMode -> CostCenterStackCosts -> Number
+    getCsCost am cs = case am of
         Time -> cs.inherited.time
         Alloc -> cs.inherited.alloc
 
@@ -168,7 +132,9 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
         doCollapse s = s { collapsed = true }
 
     startingTree :: AnalysisMode -> AnnotatedCostCenterStackTree
-    startingTree am = annotatedTree am 0 { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight, direction: Horiz } costCenterStack
+    startingTree am =
+        layoutTree am { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight }
+            $ annotatedTree 0 costCenterStack
 
     initialState :: AnalysisMode -> State
     initialState am =
@@ -309,23 +275,22 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
         focusRing :: Array (H.ComponentHTML Action ChildSlots m)
         focusRing = fromMaybe [] $ do
             cs' <- getin focus cs
-            { x, y, width, height } <- cs'.coords
             pure
                 [ rect
-                    [ HP.attr (H.AttrName "x") (show (x + 1.5)) -- TODO: precalculate shared stuff
-                    , HP.attr (H.AttrName "y") (show (y + 1.5))
-                    , HP.attr (H.AttrName "width") (show (width - 3.0))
-                    , HP.attr (H.AttrName "height") (show (height - 3.0))
+                    [ HP.attr (H.AttrName "x") (show (cs'.coords.x + 1.5)) -- TODO: precalculate shared stuff
+                    , HP.attr (H.AttrName "y") (show (cs'.coords.y + 1.5))
+                    , HP.attr (H.AttrName "width") (show (abs (cs'.coords.width - 3.0)))
+                    , HP.attr (H.AttrName "height") (show (abs (cs'.coords.height - 3.0)))
                     , HP.attr (H.AttrName "stroke") "black"
                     , HP.attr (H.AttrName "stroke-width") "3"
                     , HP.attr (H.AttrName "stroke-dasharray") "5,5,5"
                     , HP.attr (H.AttrName "fill") "none"
                     ] []
                 , rect
-                    [ HP.attr (H.AttrName "x") (show (x + 1.5))
-                    , HP.attr (H.AttrName "y") (show (y + 1.5))
-                    , HP.attr (H.AttrName "width") (show (width - 3.0))
-                    , HP.attr (H.AttrName "height") (show (height - 3.0))
+                    [ HP.attr (H.AttrName "x") (show (cs'.coords.x + 1.5))
+                    , HP.attr (H.AttrName "y") (show (cs'.coords.y + 1.5))
+                    , HP.attr (H.AttrName "width") (show (abs (cs'.coords.width - 3.0)))
+                    , HP.attr (H.AttrName "height") (show (abs (cs'.coords.height - 3.0)))
                     , HP.attr (H.AttrName "stroke") "white"
                     , HP.attr (H.AttrName "stroke-width") "3"
                     , HP.attr (H.AttrName "stroke-dasharray") "0,5,0"
@@ -346,7 +311,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     displayStackInfo :: AnalysisMode -> CostCenterStackCosts -> String
     displayStackInfo am cs =
         "Function: " <> cs.name <>
-            " (" <> show cs.entries <> " entries, " <> show (getCost am cs) <> "%)"
+            " (" <> show cs.entries <> " entries, " <> show (getCsCost am cs) <> "%)"
 
     drawBisectoidView :: AnalysisMode -> TreeCoords -> TreeCoords -> Tree AnnotatedCostCenterStackCosts -> Array (H.ComponentHTML Action ChildSlots m)
     drawBisectoidView am focus currentCoords (Node{ value: { stack: cs@{ name }, collapsed, depth, index, coords }, children }) =
@@ -356,51 +321,40 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
             if collapsed
             then []
             else showBisectoidHelper am focus currentCoords children
-        drawBox =
-            case coords of
-                Just { x, y, width, height } ->
-                    [ rect
-                        [ HE.onClick (\_ -> Just (Focus currentCoords))
-                        , HP.attr (H.AttrName "x") (show x)
-                        , HP.attr (H.AttrName "y") (show y)
-                        , HP.attr (H.AttrName "width") (show width)
-                        , HP.attr (H.AttrName "height") (show height)
-                        , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
-                        ]
-                        [ title
-                            []
-                            [ text [] [ HH.text $ displayStackInfo am cs ]]
-                        ]
-                    ]
-                Nothing -> []
+        drawBox = 
+            [ rect
+                [ HE.onClick (\_ -> Just (Focus currentCoords))
+                , HP.attr (H.AttrName "x") (show coords.x)
+                , HP.attr (H.AttrName "y") (show coords.y)
+                , HP.attr (H.AttrName "width") (show coords.width)
+                , HP.attr (H.AttrName "height") (show coords.height)
+                , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
+                ]
+                [ title
+                    []
+                    [ text [] [ HH.text $ displayStackInfo am cs ]]
+                ]
+            ]
 
-    -- Re-annotate the tree when switching between analysis modes... this duplicates some logic from the initial annotation,
-    -- which sucks, so I should maybe re-think my approach at some point
-    reannotateTree :: AnalysisMode -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
-    reannotateTree am coords cs =
-        reverse $ foldr (reannotator coords) Nil $ reverse cs
+    -- The tree needs to be re-laid out, then re-annotated when switching between analysis modes...
+    layoutTree :: AnalysisMode -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
+    layoutTree am coords cs = 
+        let treeified = treemap am cs { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } in
+        reannotate 0 treeified
         where
-        reannotator :: BisectoidCoords -> Tree AnnotatedCostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
-        reannotator innercoords (Node { value: v@{ stack }, children }) Nil =
-            let { width, height, direction } = getNewCoords am innercoords stack
-                newCoords = { x: innercoords.x, y: innercoords.y, width, height, direction } in
+        addDepth :: Int -> Tree AnnotatedCostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
+        addDepth depth (Node{ value, children }) Nil =
             (Node
-                { value: v { coords = Just newCoords }
-                , children: (reannotateTree am newCoords children) }
-            ) : Nil
-        reannotator outercoords (Node { value: v@{ stack }, children }) (n@(Node{ value: { coords: innercoords } }) : ns) =
-            let justCoords = fromMaybe { x: 0.0, y: 0.0, width: 0.0, height: 0.0, direction: Horiz } innercoords
-                horizontal = justCoords.direction == Horiz
-                newX = if horizontal then justCoords.x else justCoords.x + justCoords.width
-                newY = if horizontal then justCoords.y + justCoords.height else justCoords.y
-                newWidth = outercoords.width - (newX - outercoords.x)
-                newHeight = outercoords.height - (newY - outercoords.y)
-                newCoords = getNewCoords am { x: newX, y: newY, width: newWidth, height: newHeight, direction: justCoords.direction } stack in
+                { value: value { depth = depth, index = 0 }
+                , children: (reannotate (depth + 1) children)
+                }) : Nil
+        addDepth depth (Node{ value, children }) (x@(Node{value:{index}}):xs) =
             (Node
-                { value: v { coords = Just newCoords }
-                , children: (reannotateTree am newCoords children) }
-            ) : n : ns
-
+                { value: value { depth = depth, index = index + 1 }
+                , children: (reannotate (depth + 1) children)
+                }) : x : xs
+        reannotate :: Int -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
+        reannotate depth xs = reverse $ foldr (addDepth depth) Nil $ reverse xs
 
     eval :: Action -> H.HalogenM State Action ChildSlots o m Unit
     eval NoOp = pure unit
@@ -409,10 +363,8 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
         _ <- H.modify $ \state ->
             state
                 { analysisMode = mode
-                , costCenterStack = reannotateTree mode { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight, direction: Horiz } cs
+                , costCenterStack = layoutTree mode { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } cs
                 }
-            -- TODO: Analysis mode switching doesn't change the view, because the layout work is currently baked into the annotated tree
-            -- and switching modes doesn't touch the tree... ideally the layout work would move into the render function
         pure unit
     eval (Uncollapse coords) = do
         _ <- H.modify $ \state ->
@@ -433,7 +385,77 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
 getColor :: CostCenterStackCosts -> String
 getColor cs =
     let tot = sum (map toCharCode (toCharArray (cs.mod <> cs.name <> cs.src)))
-        idx = tot `mod` (Arr.length largeColorSet)
-    in case (Arr.(!!) largeColorSet idx) of
+        idx = tot `mod` (Arr.length largeColorSet) in
+    case (Arr.(!!) largeColorSet idx) of
         Just col' -> col'
         _ -> "red"
+
+-- https://github.com/slamdata/purescript-treemap
+treemap ∷ AnalysisMode -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
+treemap am xs coords@({ width, height }) =
+  let scale = width * height / F.sum (getCost <$> xs)
+      squareParent = squarify getCost scale xs coords in
+  map (\(Node{ value, children }) -> Node{ value, children: treemap am children value.coords  }) squareParent
+  where
+  getCost (Node{ value: { stack: { inherited: { time, alloc }} } }) =
+    case am of
+        Time -> (time * 0.01)
+        Alloc -> (alloc * 0.01)
+
+squarify ∷ (Tree AnnotatedCostCenterStackCosts -> Number) -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
+squarify f scale xs rect =
+    let sorted = L.sortBy (flip compare `on` f) xs
+    in join $ go Nil rect sorted Nil 0.0 (shortestSide rect)
+    where
+    go ∷ List (AnnotatedCostCenterStackTree) -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree -> Number -> Number -> List (AnnotatedCostCenterStackTree)
+    go result rect xs row s w =
+        case xs of
+            x : xs' ->
+                let row' = x : row
+                    s' = s + f x in
+                if L.null row || worst row s w >= worst row' s' w
+                then go result rect xs' row' s' w
+                else
+                    let rect' = trim (s * scale) rect
+                        result' = layout row (s * scale) rect : result in
+                    go result' rect' xs Nil 0.0 (shortestSide rect')
+            _ -> layout row (s * scale) rect : result
+
+    worst ∷ AnnotatedCostCenterStackTree -> Number -> Number -> Number
+    worst row s w =
+        let s2 = s * s
+            w2 = w * w / scale
+            rMin = maybe 0.0 f (L.head row)
+            rMax = maybe 0.0 f (L.last row) in
+        max (w2 * rMax / s2) (s2 / (w2 * rMin))
+
+    layout ∷ AnnotatedCostCenterStackTree -> Number -> BisectoidCoords -> AnnotatedCostCenterStackTree
+    layout row s { x, y, width, height } =
+        if width >= height
+        then 
+            let aw = s / height in
+            snd $ F.foldl
+                (\(Tuple offset result) r@(Node{ value, children }) ->
+                    let h = f r * scale / aw
+                        coords = { x, y: offset, width: aw, height: h} in
+                    Tuple (offset + h) ((Node{ value: value { coords = coords }, children }) : result))
+                (Tuple y Nil)
+                row
+        else
+            let ah = s / width in
+            snd $ F.foldl
+                (\(Tuple offset result) r@(Node{ value, children }) ->
+                    let w = f r * scale / ah
+                        coords = { x: offset, y, width: w, height: ah } in
+                    Tuple (offset + w) ((Node{ value: value { coords = coords }, children }) : result))
+                (Tuple x Nil)
+                row
+
+shortestSide ∷ BisectoidCoords -> Number
+shortestSide { width, height } = min width height
+
+trim ∷ Number -> BisectoidCoords -> BisectoidCoords
+trim s { x, y, width, height } =
+    if width >= height
+    then let aw = s / height in { x: (x + aw), y, width: (width - aw), height }
+    else let ah = s / width in { x, y: (y + ah), width, height: (height - ah) }
