@@ -162,7 +162,7 @@ component =
                 [ HH.text "Profligate is a tool to help you visualize your GHC profile files like a pro... file." ]
             , HH.p_
                 [ HH.text $ "Just drop your .prof file (generated with the GHC RTS -p flag) up above, and " <>
-                    "profligate will produce a flame graph-style visualization of your program's cost-centre stacks to help you " <>
+                    "profligate will produce a visualization of your program's cost-centres to help you " <>
                     "analyze your program's performance."
                 ]
             , HH.p_
