@@ -92,7 +92,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     annotateTree :: Int -> Tree CostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
     annotateTree depth (Node { value, children }) xs =
         (Node
-            { value: { index: 0, depth, collapsed: false, stack: value, coords: { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } }
+            { value: { index: 0, depth, collapsed: true, stack: value, coords: { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } }
             , children: (annotatedTree (depth + 1) children) }
         ) : xs
 
