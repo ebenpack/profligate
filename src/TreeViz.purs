@@ -92,7 +92,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     annotateTree :: Int -> Tree CostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
     annotateTree depth (Node { value, children }) xs =
         (Node
-            { value: { index: 0, depth, collapsed: true, stack: value, coords: { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } }
+            { value: { index: 0, depth, collapsed: false, stack: value, coords: { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } }
             , children: (annotatedTree (depth + 1) children) }
         ) : xs
 
@@ -321,7 +321,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
             if collapsed
             then []
             else showBisectoidHelper am focus currentCoords children
-        drawBox = 
+        drawBox = if coords.width == 0.0 || coords.height == 0.0 then [] else
             [ rect
                 [ HE.onClick (\_ -> Just (Focus currentCoords))
                 , HP.attr (H.AttrName "x") (show coords.x)
@@ -394,19 +394,19 @@ getColor cs =
 treemap ∷ AnalysisMode -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
 treemap am s xs coords@({ width, height }) =
   let totalCost = getTotalCost xs
-      scale = (width * height / totalCost) * s
-      squareParent = squarify getCost scale xs coords
-      totalChildCost = F.foldl (\tot (Node{ value, children }) -> tot + (getTotalCost children)) 0.0 squareParent in
-  map (treemapChild (totalChildCost / totalCost)) squareParent
+      scale = if totalCost == 0.0 then 0.0 else (width * height / totalCost) * s
+      squareParent = squarify getCost scale xs coords in
+  map treemapChild squareParent
   where
-  treemapChild s (Node{ value, children }) =
-    let childCost = getTotalCost children in
-    Node{ value, children: treemap am s children value.coords }
-  getCost (Node{ value: { stack: { inherited: { time, alloc }} } }) =
+  treemapChild c@(Node{ value, children }) =
+    let childCost = getTotalCost children
+        childScale = childCost / (getCost c) in
+    Node{ value, children: treemap am childScale children value.coords }
+  getCost (Node{ value: { stack: { name, inherited: { time, alloc }} } }) =
     case am of
         Time -> (time * 0.01)
         Alloc -> (alloc * 0.01)
-  getTotalCost xs = F.sum (getCost <$> xs)
+  getTotalCost xs' = F.sum (getCost <$> xs')
 
 squarify ∷ (Tree AnnotatedCostCenterStackCosts -> Number) -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
 squarify f scale cs coords =
