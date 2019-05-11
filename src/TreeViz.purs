@@ -393,18 +393,20 @@ getColor cs =
 -- https://github.com/slamdata/purescript-treemap
 treemap ∷ AnalysisMode -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
 treemap am s xs coords@({ width, height }) =
-  let totalCost = F.sum (getCost <$> xs)
+  let totalCost = getTotalCost xs
       scale = (width * height / totalCost) * s
-      squareParent = squarify getCost scale xs coords in
-  map (treemapChild totalCost) squareParent
+      squareParent = squarify getCost scale xs coords
+      totalChildCost = F.foldl (\tot (Node{ value, children }) -> tot + (getTotalCost children)) 0.0 squareParent in
+  map (treemapChild (totalChildCost / totalCost)) squareParent
   where
-  treemapChild totalCost (Node{ value, children }) =
-    let childCost = F.sum (getCost <$> children) in
-    Node{ value, children: treemap am (childCost / totalCost) children value.coords }
+  treemapChild s (Node{ value, children }) =
+    let childCost = getTotalCost children in
+    Node{ value, children: treemap am s children value.coords }
   getCost (Node{ value: { stack: { inherited: { time, alloc }} } }) =
     case am of
         Time -> (time * 0.01)
         Alloc -> (alloc * 0.01)
+  getTotalCost xs = F.sum (getCost <$> xs)
 
 squarify ∷ (Tree AnnotatedCostCenterStackCosts -> Number) -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
 squarify f scale cs coords =
