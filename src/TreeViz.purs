@@ -339,7 +339,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
     -- The tree needs to be re-laid out, then re-annotated when switching between analysis modes...
     layoutTree :: AnalysisMode -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
     layoutTree am coords cs = 
-        let treeified = treemap am cs { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } in
+        let treeified = treemap am 1.0 cs { x: 0.0, y: 0.0, width: totalWidth, height: totalHeight } in
         reannotate 0 treeified
         where
         addDepth :: Int -> Tree AnnotatedCostCenterStackCosts -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
@@ -387,16 +387,20 @@ getColor cs =
     let tot = sum (map toCharCode (toCharArray (cs.mod <> cs.name <> cs.src)))
         idx = tot `mod` (Arr.length largeColorSet) in
     case (Arr.(!!) largeColorSet idx) of
-        Just col' -> col'
+        Just col -> col
         _ -> "red"
 
 -- https://github.com/slamdata/purescript-treemap
-treemap ∷ AnalysisMode -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
-treemap am xs coords@({ width, height }) =
-  let scale = width * height / F.sum (getCost <$> xs)
+treemap ∷ AnalysisMode -> Number -> AnnotatedCostCenterStackTree -> BisectoidCoords -> AnnotatedCostCenterStackTree
+treemap am s xs coords@({ width, height }) =
+  let totalCost = F.sum (getCost <$> xs)
+      scale = (width * height / totalCost) * s
       squareParent = squarify getCost scale xs coords in
-  map (\(Node{ value, children }) -> Node{ value, children: treemap am children value.coords  }) squareParent
+  map (treemapChild totalCost) squareParent
   where
+  treemapChild totalCost (Node{ value, children }) =
+    let childCost = F.sum (getCost <$> children) in
+    Node{ value, children: treemap am (childCost / totalCost) children value.coords }
   getCost (Node{ value: { stack: { inherited: { time, alloc }} } }) =
     case am of
         Time -> (time * 0.01)
