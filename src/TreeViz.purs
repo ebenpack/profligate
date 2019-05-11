@@ -2,16 +2,17 @@ module Profligate.TreeViz where
 
 import Prelude
 
+import Control.MonadZero (guard)
 import Data.Array as Arr
 import Data.Char (toCharCode)
 import Data.Foldable (foldr, sum)
 import Data.Foldable as F
-import Data.Function (on)
 import Data.List (List(..), (:), reverse, null, snoc)
 import Data.List as L
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.Number (isNaN)
 import Data.String.CodeUnits (toCharArray)
+import Data.Function (on)
+import Data.Number (isNaN)
 import Data.Tuple (Tuple(..), snd)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
@@ -276,6 +277,7 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
         focusRing :: Array (H.ComponentHTML Action ChildSlots m)
         focusRing = fromMaybe [] $ do
             cs' <- getin focus cs
+            guard $ shouldDraw cs'
             pure
                 [ rect
                     [ HP.attr (H.AttrName "x") (show (cs'.coords.x + 1.5)) -- TODO: precalculate shared stuff
@@ -299,6 +301,9 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
                     ] []
                 ]
 
+    shouldDraw :: AnnotatedCostCenterStackCosts -> Boolean
+    shouldDraw { coords: { width, height }} = not (width == 0.0 || height == 0.0 || isNaN width || isNaN height)
+
     showBisectoidHelper :: AnalysisMode -> TreeCoords -> TreeCoords -> AnnotatedCostCenterStackTree -> Array (H.ComponentHTML Action ChildSlots m)
     showBisectoidHelper am focus treeCoords cs = row
         where
@@ -306,8 +311,12 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
             row = (Arr.foldr rowHelper [] $ Arr.fromFoldable cs)
 
             rowHelper :: Tree AnnotatedCostCenterStackCosts -> Array (H.ComponentHTML Action ChildSlots m) -> Array (H.ComponentHTML Action ChildSlots m)
-            rowHelper c@(Node{ value: { index, stack: { inherited: { time } } } }) acc = (drawBisectoidView am focus (snoc treeCoords index) c) <> acc
+            rowHelper c@(Node{ value: v@{ index, stack: { inherited: { time } } } }) acc =
+                if shouldDraw v
+                then (drawBisectoidView am focus (snoc treeCoords index) c) <> acc
+                else acc
 
+            
     -- TODO: Duplicated, move to util?
     displayStackInfo :: AnalysisMode -> CostCenterStackCosts -> String
     displayStackInfo am cs =
@@ -322,24 +331,20 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
             if collapsed
             then []
             else showBisectoidHelper am focus currentCoords children
-        shouldNotDraw = coords.width == 0.0 || coords.height == 0.0 || isNaN coords.width || isNaN coords.width
-        drawBox =
-            if shouldNotDraw
-            then []
-            else
-                [ rect
-                    [ HE.onClick (\_ -> Just (Focus currentCoords))
-                    , HP.attr (H.AttrName "x") (show coords.x)
-                    , HP.attr (H.AttrName "y") (show coords.y)
-                    , HP.attr (H.AttrName "width") (show coords.width)
-                    , HP.attr (H.AttrName "height") (show coords.height)
-                    , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
-                    ]
-                    [ title
-                        []
-                        [ text [] [ HH.text $ displayStackInfo am cs ]]
-                    ]
+        drawBox = if coords.width == 0.0 || coords.height == 0.0 then [] else
+            [ rect
+                [ HE.onClick (\_ -> Just (Focus currentCoords))
+                , HP.attr (H.AttrName "x") (show coords.x)
+                , HP.attr (H.AttrName "y") (show coords.y)
+                , HP.attr (H.AttrName "width") (show coords.width)
+                , HP.attr (H.AttrName "height") (show coords.height)
+                , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
                 ]
+                [ title
+                    []
+                    [ text [] [ HH.text $ displayStackInfo am cs ]]
+                ]
+            ]
 
     -- The tree needs to be re-laid out, then re-annotated when switching between analysis modes...
     layoutTree :: AnalysisMode -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
