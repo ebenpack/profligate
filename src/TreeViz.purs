@@ -6,11 +6,12 @@ import Data.Array as Arr
 import Data.Char (toCharCode)
 import Data.Foldable (foldr, sum)
 import Data.Foldable as F
+import Data.Function (on)
 import Data.List (List(..), (:), reverse, null, snoc)
 import Data.List as L
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Number (isNaN)
 import Data.String.CodeUnits (toCharArray)
-import Data.Function (on)
 import Data.Tuple (Tuple(..), snd)
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (class MonadEffect)
@@ -321,20 +322,24 @@ treeViz { costCenterStack } analysisMode = H.mkComponent
             if collapsed
             then []
             else showBisectoidHelper am focus currentCoords children
-        drawBox = if coords.width == 0.0 || coords.height == 0.0 then [] else
-            [ rect
-                [ HE.onClick (\_ -> Just (Focus currentCoords))
-                , HP.attr (H.AttrName "x") (show coords.x)
-                , HP.attr (H.AttrName "y") (show coords.y)
-                , HP.attr (H.AttrName "width") (show coords.width)
-                , HP.attr (H.AttrName "height") (show coords.height)
-                , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
+        shouldNotDraw = coords.width == 0.0 || coords.height == 0.0 || isNaN coords.width || isNaN coords.width
+        drawBox =
+            if shouldNotDraw
+            then []
+            else
+                [ rect
+                    [ HE.onClick (\_ -> Just (Focus currentCoords))
+                    , HP.attr (H.AttrName "x") (show coords.x)
+                    , HP.attr (H.AttrName "y") (show coords.y)
+                    , HP.attr (H.AttrName "width") (show coords.width)
+                    , HP.attr (H.AttrName "height") (show coords.height)
+                    , HP.attr (H.AttrName "fill") (getColor cs) -- TODO: Fix coloring
+                    ]
+                    [ title
+                        []
+                        [ text [] [ HH.text $ displayStackInfo am cs ]]
+                    ]
                 ]
-                [ title
-                    []
-                    [ text [] [ HH.text $ displayStackInfo am cs ]]
-                ]
-            ]
 
     -- The tree needs to be re-laid out, then re-annotated when switching between analysis modes...
     layoutTree :: AnalysisMode -> BisectoidCoords -> AnnotatedCostCenterStackTree -> AnnotatedCostCenterStackTree
