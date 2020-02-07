@@ -73,7 +73,7 @@ parseDateTime = do
 -- Title
 
 parseHeader :: Parser Unit
-parseHeader = do
+parseHeader =
     string "Time and Allocation Profiling Report" *>
     skipSpaces *> 
     string "(Final)" *>

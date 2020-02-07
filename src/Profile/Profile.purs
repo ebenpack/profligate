@@ -27,7 +27,7 @@ depth xs = 1 + (foldr (\(Node { children: c}) acc -> max acc (depth c)) 0 xs)
 
 filter :: forall a. (a -> Boolean) -> Forest a -> Forest a
 filter _ Nil = Nil
-filter f (n@Node { value, children }:xs) =
+filter f n@(Node { value, children }:xs) =
     if not $ f value
     then filter f xs
     else Node { value, children: filter f children } : filter f xs
