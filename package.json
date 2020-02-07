@@ -1,17 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "build": "pulp build --to dist/app.js",
-    "watch": "pulp -w build --to dist/app.js",
-    "watch-fast": "webpack --mode=development --entry ./entry.js --output-path ./dist --output-filename app.js --progress --watch",
-    "test": "pulp --watch test"
+    "minify": "google-closure-compiler --js=dist/app.js --js_output_file=dist/app.min.js"
   },
   "devDependencies": {
-    "pulp": "^12.3.0",
-    "purescript": "^0.12.0",
-    "purescript-psa": "^0.7.2",
-    "webpack": "^4.16.2",
-    "webpack-cli": "^3.1.0"
+    "google-closure-compiler": "^20200204.0.0"
   },
   "dependencies": {}
 }
