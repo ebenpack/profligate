@@ -3,6 +3,7 @@
 .pulp-cache
 bower_components
 node_modules
+.spago/
 
 # Generated files
 .psci
