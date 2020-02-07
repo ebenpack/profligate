@@ -8,8 +8,10 @@ node_modules
 .psci
 output
 .psc-ide-port
+.spago/
 
 /output/
 /dist/app.js
+/dist/app.min.js
 package-lock.json
 .DS_Store
