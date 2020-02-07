@@ -5,16 +5,17 @@ import Prelude
 import Data.Either (Either(..), isRight)
 import Data.Foldable (sequence_)
 import Data.Traversable (traverse)
-import Effect (Effect)
+import Effect.Aff (Aff)
+import Effect.Aff.Class (liftAff)
 import Node.Encoding (Encoding(..))
-import Node.FS.Sync (readTextFile, readdir)
+import Node.FS.Aff (readTextFile, readdir)
 import Node.Path (FilePath)
 import Profligate.Profile.ParseProfile as ParseProf
 import Test.Profile.TestData (dateTime, simpleCostCenterStackCosts, verboseCostCenterStackCosts, simplePerCostCenterCosts, verbosePerCostCenterCosts, simplePerCostCenterCostsLine, verbosePerCostCenterCostsLine, simpleCostCenterStackCostsLine, verboseCostCenterStackCostsLine)
 import Test.Spec (Spec, describe, it)
 import Test.Spec.Assertions (shouldEqual)
 import Test.Spec.Reporter.Console (consoleReporter)
-import Test.Spec.Runner (run)
+import Test.Spec.Runner (runSpec)
 import Text.Parsing.StringParser (runParser)
 
 test_parseDateTime :: Spec Unit
@@ -114,13 +115,13 @@ test_parseVerboseProfFile f = describe "parseverboseProfFile" $ do
                     , costCenterStack: verboseCostCenterStackCosts
                     })
 
-main :: Effect Unit
+main :: Aff Unit
 main = do
     testFilePaths <- readdir "test/data/"
     testFiles <- traverse getFile testFilePaths
     testFile <- readTextFile UTF8 "test/data/hasktest-exe.prof"
     testVerboseFile <- readTextFile UTF8 "test/data/hasktest-exe-verbose.prof"
-    run [consoleReporter] do
+    runSpec [consoleReporter] do
         test_parseInteger
         test_parseIntegerWithCommas
         test_parseDateTime
@@ -132,7 +133,7 @@ main = do
         test_parseVerboseProfFile testVerboseFile
         test_parseProfFiles testFiles
     where
-    getFile :: FilePath -> Effect { filename :: String, contents :: String }
+    getFile :: FilePath -> Aff { filename :: String, contents :: String }
     getFile p = do
-        f <- readTextFile UTF8 $ "test/data/" <> p
+        f <- liftAff $ readTextFile UTF8 $ "test/data/" <> p
         pure { filename: p, contents: f}
