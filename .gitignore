@@ -12,5 +12,6 @@ output
 
 /output/
 /dist/app.js
+/dist/app.min.js
 package-lock.json
 .DS_Store
