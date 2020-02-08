@@ -102,7 +102,7 @@ component =
                                 ]  <> if state.displayMode == FlameGraph then [ HP.attr (H.AttrName "checked") "checked" ] else [])
                             , HH.span
                                 []
-                                [ HH.text "Flame Grap" ]
+                                [ HH.text "Flame Graph" ]
                             ]
                         ]
                     ]
