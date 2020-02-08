@@ -1,10 +1,14 @@
 {
   "private": true,
   "scripts": {
+    "build": "spago bundle-app --to dist/app.js --then \"npm run minify\"",
+    "build:watch": "npm run build -- --watch",
     "minify": "google-closure-compiler --js=dist/app.js --js_output_file=dist/app.min.js"
   },
   "devDependencies": {
-    "google-closure-compiler": "^20200204.0.0"
+    "google-closure-compiler": "^20200204.0.0",
+    "purescript": "^0.13.6",
+    "spago": "^0.13.1"
   },
   "dependencies": {}
 }
