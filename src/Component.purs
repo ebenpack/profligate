@@ -64,7 +64,7 @@ component =
     initialState =
         { profFile: Nothing
         , parseError: Nothing
-        , displayMode: TreeViz
+        , displayMode: FlameGraph
         , analysisMode: Time
         , loading: false
         }
