@@ -83,19 +83,6 @@ component =
                         [ HH.label
                             [ HP.attr (H.AttrName "class") "switch"  ]
                             [ HH.input
-                                ([ HE.onClick (\e -> Just $ SetDisplayMode TreeViz)
-                                , HP.attr (H.AttrName "type") "radio"
-                                , HP.attr (H.AttrName "name") "displayMode"
-                                ]  <> if state.displayMode == TreeViz then [ HP.attr (H.AttrName "checked") "checked" ] else [])
-                            , HH.span
-                                []
-                                [ HH.text "Tree Vizualizer" ]
-                            ]
-                        ]
-                    , HH.span_
-                        [ HH.label
-                            [ HP.attr (H.AttrName "class") "switch"  ]
-                            [ HH.input
                                 ([ HE.onClick (\e -> Just $ SetDisplayMode FlameGraph)
                                 , HP.attr (H.AttrName "type") "radio"
                                 , HP.attr (H.AttrName "name") "displayMode"
@@ -103,6 +90,19 @@ component =
                             , HH.span
                                 []
                                 [ HH.text "Flame Graph" ]
+                            ]
+                        ]
+                    , HH.span_
+                        [ HH.label
+                            [ HP.attr (H.AttrName "class") "switch"  ]
+                            [ HH.input
+                                ([ HE.onClick (\e -> Just $ SetDisplayMode TreeViz)
+                                , HP.attr (H.AttrName "type") "radio"
+                                , HP.attr (H.AttrName "name") "displayMode"
+                                ]  <> if state.displayMode == TreeViz then [ HP.attr (H.AttrName "checked") "checked" ] else [])
+                            , HH.span
+                                []
+                                [ HH.text "Tree Vizualizer" ]
                             ]
                         ]
                     ]
