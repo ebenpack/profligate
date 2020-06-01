@@ -5,7 +5,9 @@ import Prelude
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (SProxy(..))
+import Data.Time.Duration (Milliseconds(..))
 import Effect.Aff.Class (class MonadAff)
+import Effect.Aff (delay)
 import Effect.Class (class MonadEffect)
 import Foreign (unsafeFromForeign)
 import Halogen as H
@@ -201,6 +203,10 @@ component =
             _ <- H.modify $ \state -> state { displayMode = mode }
             pure unit
         FileLoaded fr -> do
+            -- This is a bit stinky, but a little delay here relinquishes the
+            -- main thread before we do some heavy parsing, which allows the UI to
+            -- update to show our spinner
+            H.liftAff $ delay $ Milliseconds 17.29
             t <- H.liftEffect $ result fr
             let prof = runParser parseProfFile $ unsafeFromForeign t
             _ <- H.modify (\state ->
@@ -232,12 +238,12 @@ component =
                 Just blob' -> do
                     fr <- H.liftEffect $ fileReader
                     let et = toEventTarget fr
-                    subthingy et fr
-                    t <- H.liftEffect $ readAsText blob' fr
+                    subscribeToUploadEvent et fr
+                    H.liftEffect $ readAsText blob' fr
                     pure unit
             pure unit
         where
-        subthingy trgt fr =
+        subscribeToUploadEvent trgt fr =
             void $ H.subscribe $
                 HES.eventListenerEventSource (EventType "load") trgt \evt -> pure $ FileLoaded fr
 
