@@ -9,7 +9,7 @@
   "devDependencies": {
     "google-closure-compiler": "^20200204.0.0",
     "purescript": "^0.13.6",
-    "spago": "^0.13.1"
+    "spago": "^0.15.2"
   },
   "dependencies": {}
 }
