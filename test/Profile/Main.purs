@@ -5,7 +5,9 @@ import Prelude
 import Data.Either (Either(..), isRight)
 import Data.Foldable (sequence_)
 import Data.Traversable (traverse)
-import Effect.Aff (Aff)
+import Effect (Effect)
+import Effect.Class.Console (log)
+import Effect.Aff (Aff, runAff_)
 import Effect.Aff.Class (liftAff)
 import Node.Encoding (Encoding(..))
 import Node.FS.Aff (readTextFile, readdir)
@@ -115,8 +117,8 @@ test_parseVerboseProfFile f = describe "parseverboseProfFile" $ do
                     , costCenterStack: verboseCostCenterStackCosts
                     })
 
-main :: Aff Unit
-main = do
+main_aff :: Aff Unit
+main_aff = do
     testFilePaths <- readdir "test/data/"
     testFiles <- traverse getFile testFilePaths
     testFile <- readTextFile UTF8 "test/data/hasktest-exe.prof"
@@ -137,3 +139,12 @@ main = do
     getFile p = do
         f <- liftAff $ readTextFile UTF8 $ "test/data/" <> p
         pure { filename: p, contents: f}
+
+
+main :: Effect Unit
+main = do
+    runAff_ (\result ->
+        case result of
+            Left err -> log $ show err
+            Right _ -> pure unit
+    ) main_aff
